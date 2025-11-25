@@ -226,7 +226,7 @@ def main():
     # 从环境变量读取配置
     sender_email = os.environ.get('SENDER_EMAIL')
     sender_password = os.environ.get('SENDER_PASSWORD')
-    receiver_email = os.environ.get('RECEIVER_EMAIL', '2502571794@qq.com')
+    receiver_email = os.environ.get('RECEIVER_EMAIL')
     
     # 买入价阈值（高于此值提醒）
     buy_threshold = float(os.environ.get('BUY_THRESHOLD', '940'))
@@ -234,8 +234,8 @@ def main():
     sell_threshold = float(os.environ.get('SELL_THRESHOLD', '930'))
     
     # 检查必要的环境变量
-    if not sender_email or not sender_password:
-        print("[ERROR] Please set SENDER_EMAIL and SENDER_PASSWORD in GitHub Secrets")
+    if not sender_email or not sender_password or not receiver_email:
+        print("[ERROR] Please set SENDER_EMAIL, SENDER_PASSWORD, and RECEIVER_EMAIL in GitHub Secrets")
         sys.exit(1)
     
     print("=" * 55)
