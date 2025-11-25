@@ -1,9 +1,9 @@
 name: Multi-Currency Rate Monitor
 
 on:
-  # 定时运行 - 每5分钟检查一次
+  # 定时运行 - 每10分钟检查一次（节省 GitHub Actions 额度）
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/10 * * * *'
   
   # 手动触发
   workflow_dispatch:
