@@ -1,13 +1,8 @@
 # 中国银行英镑汇率监控
 
-通过 GitHub Actions 自动监测中国银行英镑现汇买入价，当价格超过设定阈值时发送邮件提醒。
-
-## 功能特点
-
-- 🔍 每5分钟自动检查中国银行外汇牌价
-- 💷 监测英镑现汇买入价
-- 📧 价格超阈值自动发送邮件提醒
-- ☁️ 云端运行，无需本地服务器
+通过 GitHub Actions 自动监测中国银行英镑汇率：
+- **现汇买入价** > 阈值 → 发邮件提醒
+- **现汇卖出价** < 阈值 → 发邮件提醒
 
 ## 快速开始
 
@@ -15,47 +10,45 @@
 
 ### 2. 设置 Secrets
 
-在仓库页面：**Settings** → **Secrets and variables** → **Actions** → **New repository secret**
-
-添加以下 Secrets：
+**Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
 | Name | Value |
 |------|-------|
-| `SENDER_EMAIL` | 你的QQ邮箱，如 `123456@qq.com` |
+| `SENDER_EMAIL` | 你的QQ邮箱 |
 | `SENDER_PASSWORD` | QQ邮箱授权码（16位） |
-| `RECEIVER_EMAIL` | 收件邮箱，如 `2502571794@qq.com` |
+| `RECEIVER_EMAIL` | 收件邮箱 |
 
-### 3. 获取QQ邮箱授权码
-
-1. 登录 [QQ邮箱](https://mail.qq.com)
-2. **设置** → **账户**
-3. 找到 **POP3/SMTP服务** → 开启
-4. 点击 **生成授权码**
-
-### 4. 设置阈值（可选）
+### 3. 设置阈值（可选）
 
 **Settings** → **Secrets and variables** → **Actions** → **Variables** → **New repository variable**
 
-| Name | Value |
-|------|-------|
-| `THRESHOLD` | `940`（默认值，可自定义）|
+| Name | 说明 | 默认值 |
+|------|------|--------|
+| `BUY_THRESHOLD` | 买入价阈值，**高于**此值发提醒 | `940` |
+| `SELL_THRESHOLD` | 卖出价阈值，**低于**此值发提醒 | `930` |
+
+### 4. 获取QQ邮箱授权码
+
+1. 登录 [QQ邮箱](https://mail.qq.com)
+2. **设置** → **账户** → **POP3/SMTP服务** → 开启
+3. 生成授权码
 
 ### 5. 启用 Actions
 
-- 仓库页面点击 **Actions** 标签
-- 点击 **I understand my workflows, go ahead and enable them**
-- 工作流会每 5 分钟自动运行一次
+- 点击 **Actions** 标签 → 启用
+- 工作流每 5 分钟自动运行
 
 ### 6. 手动测试
 
-**Actions** → **监控英镑汇率** → **Run workflow**
+**Actions** → **GBP Rate Monitor** → **Run workflow**
+
+## 监控逻辑
+
+| 条件 | 动作 |
+|------|------|
+| 现汇买入价 > `BUY_THRESHOLD` | 发送买入价过高提醒 |
+| 现汇卖出价 < `SELL_THRESHOLD` | 发送卖出价过低提醒 |
 
 ## 数据来源
 
-- [中国银行外汇牌价](https://www.boc.cn/sourcedb/whpj/)
-
-## 注意事项
-
-1. QQ邮箱授权码不是QQ密码，需要单独生成
-2. GitHub Actions 免费账户每月有 2000 分钟额度，完全够用
-3. 当前英镑现汇买入价约为 927（2025年11月）
+[中国银行外汇牌价](https://www.boc.cn/sourcedb/whpj/)
