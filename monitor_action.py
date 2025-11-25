@@ -205,14 +205,28 @@ Sent by GitHub Actions
         msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
         
-        # 发送邮件给所有收件人
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context) as server:
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, receiver_emails, msg.as_string())
+        # 发送邮件给所有收件人（带重试机制）
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context, timeout=30) as server:
+                    server.login(sender_email, sender_password)
+                    server.sendmail(sender_email, receiver_emails, msg.as_string())
+                
+                print(f"[OK] Email sent to: {', '.join(receiver_emails)}")
+                return True
+            except (smtplib.SMTPServerDisconnected, ConnectionError, TimeoutError) as e:
+                print(f"[WARN] Attempt {attempt + 1}/{max_retries} failed: {e}")
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(5)  # 等待5秒后重试
+                    continue
+                else:
+                    print(f"[ERROR] All {max_retries} attempts failed")
+                    return False
         
-        print(f"[OK] Email sent to: {', '.join(receiver_emails)}")
-        return True
+        return False
         
     except smtplib.SMTPAuthenticationError:
         print("[ERROR] SMTP auth failed, check email and password")
