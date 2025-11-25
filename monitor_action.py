@@ -99,15 +99,16 @@ def get_gbp_exchange_rates():
         return None, None, None
 
 
-def send_email_alert(alert_type, rate, update_time, threshold, sender_email, sender_password, receiver_email, buy_rate=None, sell_rate=None):
+def send_email_alert(alert_type, rate, update_time, threshold, sender_email, sender_password, receiver_emails, buy_rate=None, sell_rate=None):
     """
     发送邮件提醒
     alert_type: 'buy_high' (买入价过高) 或 'sell_low' (卖出价过低)
+    receiver_emails: 收件人列表
     """
     try:
         msg = MIMEMultipart('alternative')
         msg['From'] = Header(f"GBP Monitor <{sender_email}>", 'utf-8')
-        msg['To'] = Header(receiver_email, 'utf-8')
+        msg['To'] = Header(", ".join(receiver_emails), 'utf-8')
         
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -204,13 +205,13 @@ Sent by GitHub Actions
         msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
         
-        # 发送邮件
+        # 发送邮件给所有收件人
         context = ssl.create_default_context()
         with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context) as server:
             server.login(sender_email, sender_password)
-            server.sendmail(sender_email, receiver_email, msg.as_string())
+            server.sendmail(sender_email, receiver_emails, msg.as_string())
         
-        print(f"[OK] Email sent to: {receiver_email}")
+        print(f"[OK] Email sent to: {', '.join(receiver_emails)}")
         return True
         
     except smtplib.SMTPAuthenticationError:
@@ -226,7 +227,7 @@ def main():
     # 从环境变量读取配置
     sender_email = os.environ.get('SENDER_EMAIL')
     sender_password = os.environ.get('SENDER_PASSWORD')
-    receiver_email = os.environ.get('RECEIVER_EMAIL')
+    receiver_email_str = os.environ.get('RECEIVER_EMAIL')
     
     # 买入价阈值（高于此值提醒）
     buy_threshold = float(os.environ.get('BUY_THRESHOLD', '940'))
@@ -234,14 +235,20 @@ def main():
     sell_threshold = float(os.environ.get('SELL_THRESHOLD', '930'))
     
     # 检查必要的环境变量
-    if not sender_email or not sender_password or not receiver_email:
+    if not sender_email or not sender_password or not receiver_email_str:
         print("[ERROR] Please set SENDER_EMAIL, SENDER_PASSWORD, and RECEIVER_EMAIL in GitHub Secrets")
+        sys.exit(1)
+    
+    # 解析多个收件人（支持逗号分隔）
+    receiver_emails = [email.strip() for email in receiver_email_str.split(',') if email.strip()]
+    if not receiver_emails:
+        print("[ERROR] No valid receiver email found")
         sys.exit(1)
     
     print("=" * 55)
     print("GBP Exchange Rate Monitor (GitHub Actions)")
     print("=" * 55)
-    print(f"Receiver: {receiver_email}")
+    print(f"Receivers: {', '.join(receiver_emails)} ({len(receiver_emails)} total)")
     print(f"Buy Threshold: > {buy_threshold} (alert if higher)")
     print(f"Sell Threshold: < {sell_threshold} (alert if lower)")
     print("=" * 55)
@@ -264,7 +271,7 @@ def main():
     if buy_rate is not None and buy_rate > buy_threshold:
         print(f"[ALERT] Buy rate {buy_rate} > {buy_threshold}, sending email...")
         if send_email_alert('buy_high', buy_rate, update_time, buy_threshold, 
-                          sender_email, sender_password, receiver_email,
+                          sender_email, sender_password, receiver_emails,
                           buy_rate, sell_rate):
             alerts_sent += 1
     else:
@@ -274,7 +281,7 @@ def main():
     if sell_rate is not None and sell_rate < sell_threshold:
         print(f"[ALERT] Sell rate {sell_rate} < {sell_threshold}, sending email...")
         if send_email_alert('sell_low', sell_rate, update_time, sell_threshold,
-                          sender_email, sender_password, receiver_email,
+                          sender_email, sender_password, receiver_emails,
                           buy_rate, sell_rate):
             alerts_sent += 1
     else:

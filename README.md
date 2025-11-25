@@ -16,7 +16,9 @@
 |------|-------|
 | `SENDER_EMAIL` | 你的QQ邮箱 |
 | `SENDER_PASSWORD` | QQ邮箱授权码（16位） |
-| `RECEIVER_EMAIL` | 收件邮箱 |
+| `RECEIVER_EMAIL` | 收件邮箱（多个用逗号分隔） |
+
+**多收件人示例：** `aaa@qq.com,bbb@gmail.com,ccc@163.com`
 
 ### 3. 设置阈值（可选）
 
