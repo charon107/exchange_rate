@@ -1,4 +1,4 @@
-name: GBP Rate Monitor
+name: Multi-Currency Rate Monitor
 
 on:
   # 定时运行 - 每5分钟检查一次
@@ -29,8 +29,9 @@ jobs:
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-          # 买入价阈值：高于此值发提醒
-          BUY_THRESHOLD: ${{ vars.BUY_THRESHOLD || '940' }}
-          # 卖出价阈值：低于此值发提醒
-          SELL_THRESHOLD: ${{ vars.SELL_THRESHOLD || '930' }}
+          # 英镑阈值
+          GBP_BUY_THRESHOLD: ${{ vars.GBP_BUY_THRESHOLD || '940' }}
+          GBP_SELL_THRESHOLD: ${{ vars.GBP_SELL_THRESHOLD || '930' }}
+          # 日元阈值（卖出价低于此值提醒）
+          JPY_SELL_THRESHOLD: ${{ vars.JPY_SELL_THRESHOLD || '5.0' }}
         run: python monitor_action.py

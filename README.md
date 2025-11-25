@@ -1,8 +1,16 @@
-# 中国银行英镑汇率监控
+# 中国银行多货币汇率监控
 
-通过 GitHub Actions 自动监测中国银行英镑汇率：
-- **现汇买入价** > 阈值 → 发邮件提醒
-- **现汇卖出价** < 阈值 → 发邮件提醒
+通过 GitHub Actions 自动监测中国银行外汇牌价，支持多货币监控：
+
+## 监控规则
+
+| 货币 | 监控条件 | 触发邮件 |
+|------|----------|----------|
+| 💷 英镑 (GBP) | 现汇买入价 > 阈值 | 发送英镑提醒 |
+| 💷 英镑 (GBP) | 现汇卖出价 < 阈值 | 发送英镑提醒 |
+| 💴 日元 (JPY) | 现汇卖出价 < 阈值 | 发送日元提醒 |
+
+**注意**：每种货币的提醒邮件独立发送，只包含该货币的信息。
 
 ## 快速开始
 
@@ -10,7 +18,7 @@
 
 ### 2. 设置 Secrets
 
-**Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+**Settings** → **Secrets and variables** → **Actions** → **Secrets**
 
 | Name | Value |
 |------|-------|
@@ -18,16 +26,15 @@
 | `SENDER_PASSWORD` | Gmail 应用专用密码（16位） |
 | `RECEIVER_EMAIL` | 收件邮箱（多个用逗号分隔） |
 
-**多收件人示例：** `aaa@gmail.com,bbb@qq.com,ccc@163.com`
+### 3. 设置阈值
 
-### 3. 设置阈值（可选）
-
-**Settings** → **Secrets and variables** → **Actions** → **Variables** → **New repository variable**
+**Settings** → **Secrets and variables** → **Actions** → **Variables**
 
 | Name | 说明 | 默认值 |
 |------|------|--------|
-| `BUY_THRESHOLD` | 买入价阈值，**高于**此值发提醒 | `940` |
-| `SELL_THRESHOLD` | 卖出价阈值，**低于**此值发提醒 | `930` |
+| `GBP_BUY_THRESHOLD` | 英镑买入价阈值，**高于**此值发提醒 | `940` |
+| `GBP_SELL_THRESHOLD` | 英镑卖出价阈值，**低于**此值发提醒 | `930` |
+| `JPY_SELL_THRESHOLD` | 日元卖出价阈值，**低于**此值发提醒 | `5.0` |
 
 ### 4. 获取 Gmail 应用专用密码
 
@@ -42,15 +49,21 @@
 
 ### 6. 手动测试
 
-**Actions** → **GBP Rate Monitor** → **Run workflow**
+**Actions** → **Multi-Currency Rate Monitor** → **Run workflow**
 
-## 监控逻辑
+## 应用场景
 
-| 条件 | 动作 |
-|------|------|
-| 现汇买入价 > `BUY_THRESHOLD` | 发送买入价过高提醒 |
-| 现汇卖出价 < `SELL_THRESHOLD` | 发送卖出价过低提醒 |
+| 场景 | 关注货币 | 关注指标 | 阈值设置 |
+|------|----------|----------|----------|
+| 想卖英镑换人民币 | 英镑 | 现汇买入价 | 越高越好 |
+| 想买英镑 | 英镑 | 现汇卖出价 | 越低越好 |
+| 想买日元 | 日元 | 现汇卖出价 | 越低越好 |
 
 ## 数据来源
 
 [中国银行外汇牌价](https://www.boc.cn/sourcedb/whpj/)
+
+## 分支说明
+
+- `main`: 原始英镑监控版本
+- `feature/multi-currency`: 多货币监控版本（英镑 + 日元）
