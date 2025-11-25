@@ -205,22 +205,41 @@ Sent by GitHub Actions
         msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
         
-        # 发送邮件给所有收件人（带重试机制）
+        # 根据发件邮箱自动选择 SMTP 服务器
+        if "gmail.com" in sender_email:
+            smtp_server = "smtp.gmail.com"
+            smtp_port = 587
+            use_tls = True
+        else:  # QQ 邮箱或其他
+            smtp_server = "smtp.qq.com"
+            smtp_port = 465
+            use_tls = False
+        
+        # 发送邮件（带重试机制）
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 context = ssl.create_default_context()
-                with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context, timeout=30) as server:
-                    server.login(sender_email, sender_password)
-                    server.sendmail(sender_email, receiver_emails, msg.as_string())
                 
-                print(f"[OK] Email sent to: {', '.join(receiver_emails)}")
+                if use_tls:
+                    # Gmail 使用 STARTTLS
+                    server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+                    server.starttls(context=context)
+                else:
+                    # QQ 邮箱使用 SSL
+                    server = smtplib.SMTP_SSL(smtp_server, smtp_port, context=context, timeout=30)
+                
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, receiver_emails, msg.as_string())
+                server.quit()
+                
+                print(f"[OK] Email sent via {smtp_server} to: {', '.join(receiver_emails)}")
                 return True
-            except (smtplib.SMTPServerDisconnected, ConnectionError, TimeoutError) as e:
+            except (smtplib.SMTPServerDisconnected, ConnectionError, TimeoutError, OSError) as e:
                 print(f"[WARN] Attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt < max_retries - 1:
                     import time
-                    time.sleep(5)  # 等待5秒后重试
+                    time.sleep(5)
                     continue
                 else:
                     print(f"[ERROR] All {max_retries} attempts failed")
