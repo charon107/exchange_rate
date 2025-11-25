@@ -1,0 +1,34 @@
+name: 监控英镑汇率
+
+on:
+  # 定时运行 - 每5分钟检查一次
+  schedule:
+    - cron: '*/5 * * * *'
+  
+  # 也可以手动触发
+  workflow_dispatch:
+
+jobs:
+  check-rate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+      
+      - name: 运行汇率监控
+        env:
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+          THRESHOLD: ${{ vars.THRESHOLD || '940' }}
+        run: python monitor_action.py
+
