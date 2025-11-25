@@ -14,11 +14,11 @@
 
 | Name | Value |
 |------|-------|
-| `SENDER_EMAIL` | 你的QQ邮箱 |
-| `SENDER_PASSWORD` | QQ邮箱授权码（16位） |
+| `SENDER_EMAIL` | 你的 Gmail 邮箱 |
+| `SENDER_PASSWORD` | Gmail 应用专用密码（16位） |
 | `RECEIVER_EMAIL` | 收件邮箱（多个用逗号分隔） |
 
-**多收件人示例：** `aaa@qq.com,bbb@gmail.com,ccc@163.com`
+**多收件人示例：** `aaa@gmail.com,bbb@qq.com,ccc@163.com`
 
 ### 3. 设置阈值（可选）
 
@@ -29,17 +29,11 @@
 | `BUY_THRESHOLD` | 买入价阈值，**高于**此值发提醒 | `940` |
 | `SELL_THRESHOLD` | 卖出价阈值，**低于**此值发提醒 | `930` |
 
-### 4. 获取邮箱授权码
+### 4. 获取 Gmail 应用专用密码
 
-**Gmail（推荐，国际连接稳定）：**
 1. 开启两步验证：[Google 账户安全](https://myaccount.google.com/security)
 2. 生成应用专用密码：[App Passwords](https://myaccount.google.com/apppasswords)
 3. 选择 "邮件" + "其他"，生成 16 位密码
-
-**QQ邮箱：**
-1. 登录 [QQ邮箱](https://mail.qq.com)
-2. **设置** → **账户** → **POP3/SMTP服务** → 开启
-3. 生成授权码
 
 ### 5. 启用 Actions
 
