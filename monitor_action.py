@@ -359,9 +359,12 @@ def main():
     print("=" * 60)
     
     alerts_sent = 0
-    
+
     # ========== 英镑监控 ==========
-    if 'GBP' in rates:
+    # 注意：英镑监控已禁用，如需启用请将下面的 False 改为 True
+    GBP_MONITOR_ENABLED = False
+
+    if GBP_MONITOR_ENABLED and 'GBP' in rates:
         gbp = rates['GBP']
         gbp_buy = gbp['buy']
         gbp_sell = gbp['sell']
