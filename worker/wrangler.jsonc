@@ -5,11 +5,10 @@
   "kv_namespaces": [
     {
       "binding": "CONFIG_KV",
-      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+      "id": "4f53717d8ea341e3898c2ff19176d64d"
     }
   ],
   "vars": {
-    "ALLOWED_ORIGIN": "https://REPLACE_WITH_YOUR_GITHUB_USERNAME.github.io",
-    "CONFIG_API_TOKEN": "REPLACE_WITH_A_LONG_RANDOM_TOKEN"
+    "ALLOWED_ORIGIN": "https://exchange-rate-axv.pages.dev"
   }
 }

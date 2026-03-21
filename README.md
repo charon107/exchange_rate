@@ -57,11 +57,11 @@ npm install
 
 - `kv_namespaces[0].id`
 - `vars.ALLOWED_ORIGIN`
-- `vars.CONFIG_API_TOKEN`
 
 然后部署：
 
 ```bash
+npx wrangler secret put CONFIG_API_TOKEN
 npx wrangler deploy
 ```
 
@@ -85,7 +85,7 @@ https://exchange-rate-monitor-config.<subdomain>.workers.dev/api/config
 - `SENDER_EMAIL`：发件邮箱
 - `SENDER_PASSWORD`：邮箱授权码或应用专用密码
 - `CONFIG_API_URL`：Worker 的 `/api/config` 地址
-- `CONFIG_API_TOKEN`：与 Worker 里一致的 Bearer Token
+- `CONFIG_API_TOKEN`：与 `wrangler secret put CONFIG_API_TOKEN` 写入的值一致
 
 ### 3. 启用 GitHub Pages
 
