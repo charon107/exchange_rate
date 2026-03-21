@@ -34,7 +34,6 @@ const els = {
   status: document.querySelector("#status"),
   addEmail: document.querySelector("#addEmail"),
   addRule: document.querySelector("#addRule"),
-  loadConfig: document.querySelector("#loadConfig"),
   saveConfig: document.querySelector("#saveConfig"),
   emailTemplate: document.querySelector("#emailTemplate"),
   ruleTemplate: document.querySelector("#ruleTemplate"),
@@ -59,8 +58,8 @@ function bootstrap() {
     });
   });
 
-  els.loadConfig.addEventListener("click", loadConfig);
   els.saveConfig.addEventListener("click", saveConfig);
+  loadConfig();
 }
 
 function setStatus(message) {
