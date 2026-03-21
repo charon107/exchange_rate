@@ -183,11 +183,40 @@ textarea {
   gap: 16px;
 }
 
+.email-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.email-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .rule-card {
   border: 1px solid rgba(99, 70, 34, 0.12);
   border-radius: 20px;
   padding: 18px;
   background: rgba(255, 255, 255, 0.65);
+}
+
+.rule-help {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(99, 70, 34, 0.12);
+}
+
+.rule-help p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.rule-help p strong {
+  color: var(--text);
 }
 
 .rule-actions {
@@ -203,6 +232,10 @@ textarea {
 @media (max-width: 800px) {
   .grid.two,
   .grid.four {
+    grid-template-columns: 1fr;
+  }
+
+  .email-row {
     grid-template-columns: 1fr;
   }
 

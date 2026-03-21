@@ -1,4 +1,17 @@
-const currencyOptions = ["GBP", "JPY", "USD", "EUR", "HKD", "AUD", "CAD", "SGD"];
+const currencyOptions = [
+  { code: "GBP", label: "GBP - 英镑" },
+  { code: "JPY", label: "JPY - 日元" },
+  { code: "USD", label: "USD - 美元" },
+  { code: "EUR", label: "EUR - 欧元" },
+  { code: "HKD", label: "HKD - 港币" },
+  { code: "AUD", label: "AUD - 澳元" },
+  { code: "CAD", label: "CAD - 加元" },
+  { code: "SGD", label: "SGD - 新加坡元" },
+];
+const CONFIG_API_URL =
+  "https://exchange-rate-monitor-config.sgzli54charon107.workers.dev/api/config";
+const CONFIG_API_TOKEN =
+  "cfut_rkiYob78uUu11mpr4LxRMWEzqY5nwGPwY0qZs6yP1e6835c4";
 
 const defaultConfig = {
   enabled: true,
@@ -15,23 +28,26 @@ const defaultConfig = {
 };
 
 const els = {
-  apiUrl: document.querySelector("#apiUrl"),
-  apiToken: document.querySelector("#apiToken"),
   enabled: document.querySelector("#enabled"),
   emails: document.querySelector("#emails"),
   rules: document.querySelector("#rules"),
   status: document.querySelector("#status"),
+  addEmail: document.querySelector("#addEmail"),
   addRule: document.querySelector("#addRule"),
   loadConfig: document.querySelector("#loadConfig"),
   saveConfig: document.querySelector("#saveConfig"),
+  emailTemplate: document.querySelector("#emailTemplate"),
   ruleTemplate: document.querySelector("#ruleTemplate"),
 };
 
 bootstrap();
 
 function bootstrap() {
-  hydrateConnectionFields();
   writeFormConfig(defaultConfig);
+
+  els.addEmail.addEventListener("click", () => {
+    appendEmailRow("");
+  });
 
   els.addRule.addEventListener("click", () => {
     appendRule({
@@ -47,18 +63,26 @@ function bootstrap() {
   els.saveConfig.addEventListener("click", saveConfig);
 }
 
-function hydrateConnectionFields() {
-  els.apiUrl.value = localStorage.getItem("configApiUrl") || "";
-  els.apiToken.value = sessionStorage.getItem("configApiToken") || "";
-}
-
-function persistConnectionFields() {
-  localStorage.setItem("configApiUrl", els.apiUrl.value.trim());
-  sessionStorage.setItem("configApiToken", els.apiToken.value.trim());
-}
-
 function setStatus(message) {
   els.status.textContent = message;
+}
+
+function renderEmails(emails) {
+  els.emails.innerHTML = "";
+  (emails.length ? emails : [""]).forEach((email) => appendEmailRow(email));
+}
+
+function appendEmailRow(email) {
+  const fragment = els.emailTemplate.content.cloneNode(true);
+  const row = fragment.querySelector(".email-row");
+  row.querySelector('[data-field="email"]').value = email;
+  row.querySelector('[data-action="remove-email"]').addEventListener("click", () => {
+    row.remove();
+    if (!els.emails.querySelector(".email-row")) {
+      appendEmailRow("");
+    }
+  });
+  els.emails.appendChild(fragment);
 }
 
 function renderRules(rules) {
@@ -73,8 +97,8 @@ function appendRule(rule) {
 
   currencyOptions.forEach((currency) => {
     const option = document.createElement("option");
-    option.value = currency;
-    option.textContent = currency;
+    option.value = currency.code;
+    option.textContent = currency.label;
     currencySelect.appendChild(option);
   });
 
@@ -92,9 +116,8 @@ function appendRule(rule) {
 }
 
 function readFormConfig() {
-  const emails = els.emails.value
-    .split(/\r?\n/)
-    .map((item) => item.trim())
+  const emails = Array.from(els.emails.querySelectorAll('[data-field="email"]'))
+    .map((input) => input.value.trim())
     .filter(Boolean);
 
   const rules = Array.from(els.rules.querySelectorAll(".rule-card")).map((card) => ({
@@ -114,26 +137,18 @@ function readFormConfig() {
 
 function writeFormConfig(config) {
   els.enabled.checked = Boolean(config.enabled);
-  els.emails.value = (config.emails || []).join("\n");
+  renderEmails(config.emails || []);
   renderRules(config.rules || []);
 }
 
 async function loadConfig() {
-  const apiUrl = els.apiUrl.value.trim();
-  const apiToken = els.apiToken.value.trim();
-  if (!apiUrl || !apiToken) {
-    setStatus("先填写 Worker API 地址和 Token");
-    return;
-  }
-
-  persistConnectionFields();
   setStatus("正在读取配置...");
 
   try {
-    const response = await fetch(apiUrl, {
+    const response = await fetch(CONFIG_API_URL, {
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${apiToken}`,
+        Authorization: `Bearer ${CONFIG_API_TOKEN}`,
       },
     });
 
@@ -150,13 +165,6 @@ async function loadConfig() {
 }
 
 async function saveConfig() {
-  const apiUrl = els.apiUrl.value.trim();
-  const apiToken = els.apiToken.value.trim();
-  if (!apiUrl || !apiToken) {
-    setStatus("先填写 Worker API 地址和 Token");
-    return;
-  }
-
   const config = readFormConfig();
   if (!config.emails.length) {
     setStatus("至少添加一个邮箱");
@@ -173,16 +181,15 @@ async function saveConfig() {
     return;
   }
 
-  persistConnectionFields();
   setStatus("正在保存配置...");
 
   try {
-    const response = await fetch(apiUrl, {
+    const response = await fetch(CONFIG_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: `Bearer ${apiToken}`,
+        Authorization: `Bearer ${CONFIG_API_TOKEN}`,
       },
       body: JSON.stringify(config),
     });

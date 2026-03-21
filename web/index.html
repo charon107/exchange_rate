@@ -11,24 +11,13 @@
       <section class="hero">
         <p class="eyebrow">Exchange Rate Monitor</p>
         <h1>汇率监控控制台</h1>
-        <p class="intro">
-          页面托管在 GitHub Pages，通过 Cloudflare Worker 读写运行时配置，
-          GitHub Actions 再按该配置执行监控任务。
-        </p>
       </section>
 
       <section class="panel">
         <h2>连接设置</h2>
-        <div class="grid two">
-          <label>
-            <span>Worker API 地址</span>
-            <input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev/api/config">
-          </label>
-          <label>
-            <span>管理 Token</span>
-            <input id="apiToken" type="password" placeholder="输入 Bearer Token">
-          </label>
-        </div>
+        <p class="muted">
+          当前站点已内置配置 API 地址与管理凭据。任何能访问此页面的人都可以直接读取和修改监控配置。
+        </p>
         <div class="row actions">
           <button id="loadConfig" class="button secondary">读取配置</button>
         </div>
@@ -49,10 +38,10 @@
 
       <section class="panel">
         <h2>提醒邮箱</h2>
-        <p class="muted">每行一个邮箱地址。</p>
-        <label>
-          <textarea id="emails" rows="6" placeholder="example1@gmail.com&#10;example2@qq.com"></textarea>
-        </label>
+        <div id="emails" class="email-list"></div>
+        <div class="row actions">
+          <button id="addEmail" class="button secondary" type="button">+ 添加邮箱</button>
+        </div>
       </section>
 
       <section class="panel">
@@ -64,6 +53,14 @@
           <button id="addRule" class="button secondary">添加规则</button>
         </div>
         <div id="rules" class="rule-list"></div>
+        <div class="rule-help">
+          <p><strong>参数说明</strong></p>
+          <p><strong>启用</strong>：控制这一条规则是否生效，关闭后不会参与监控。</p>
+          <p><strong>货币</strong>：选择要监控的币种，例如英镑、日元、美元。</p>
+          <p><strong>字段</strong>：选择监控中国银行牌价里的哪一项，现汇买入价表示银行买入该外币的价格，现汇卖出价表示银行卖出该外币的价格。</p>
+          <p><strong>条件</strong>：选择触发提醒的比较方式，大于表示高于阈值提醒，小于表示低于阈值提醒。</p>
+          <p><strong>阈值</strong>：填写你希望触发提醒的目标价格。</p>
+        </div>
       </section>
 
       <section class="panel">
@@ -113,6 +110,13 @@
           </div>
         </div>
       </article>
+    </template>
+
+    <template id="emailTemplate">
+      <div class="email-row">
+        <input data-field="email" type="email" placeholder="example@gmail.com">
+        <button type="button" class="button danger" data-action="remove-email">删除</button>
+      </div>
     </template>
 
     <script src="./app.js"></script>
