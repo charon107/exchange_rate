@@ -87,15 +87,9 @@ https://exchange-rate-monitor-config.<subdomain>.workers.dev/api/config
 - `CONFIG_API_URL`：Worker 的 `/api/config` 地址
 - `CONFIG_API_TOKEN`：与 `wrangler secret put CONFIG_API_TOKEN` 写入的值一致
 
-### 3. 启用 GitHub Pages
+### 3. 部署前端页面
 
-仓库已经包含自动部署工作流 [deploy-pages.yml](/D:/Project/exchange_rate/.github/workflows/deploy-pages.yml)。
-
-在 GitHub 仓库里：
-
-1. 进入 `Settings -> Pages`
-2. Source 选择 `GitHub Actions`
-3. 推送到 `main` 后会自动部署 `web/`
+前端页面使用 Cloudflare Pages 部署，发布目录是 `web/`。
 
 ### 4. 使用 Web 控制台
 
@@ -128,7 +122,6 @@ https://exchange-rate-monitor-config.<subdomain>.workers.dev/api/config
 ```text
 .
 ├─ .github/workflows/
-│  ├─ deploy-pages.yml
 │  └─ monitor.yml
 ├─ web/
 │  ├─ app.js
