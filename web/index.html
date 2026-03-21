@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Exchange Rate Monitor Console</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Exchange Rate Monitor</p>
+        <h1>汇率监控控制台</h1>
+        <p class="intro">
+          页面托管在 GitHub Pages，通过 Cloudflare Worker 读写运行时配置，
+          GitHub Actions 再按该配置执行监控任务。
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>连接设置</h2>
+        <div class="grid two">
+          <label>
+            <span>Worker API 地址</span>
+            <input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev/api/config">
+          </label>
+          <label>
+            <span>管理 Token</span>
+            <input id="apiToken" type="password" placeholder="输入 Bearer Token">
+          </label>
+        </div>
+        <div class="row actions">
+          <button id="loadConfig" class="button secondary">读取配置</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row split">
+          <div>
+            <h2>监控开关</h2>
+            <p class="muted">关闭后 GitHub Actions 仍会运行，但不会执行提醒规则。</p>
+          </div>
+          <label class="toggle">
+            <input id="enabled" type="checkbox">
+            <span>启用监控</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>提醒邮箱</h2>
+        <p class="muted">每行一个邮箱地址。</p>
+        <label>
+          <textarea id="emails" rows="6" placeholder="example1@gmail.com&#10;example2@qq.com"></textarea>
+        </label>
+      </section>
+
+      <section class="panel">
+        <div class="row split">
+          <div>
+            <h2>监控规则</h2>
+            <p class="muted">支持多个货币规则，每条规则可单独启停。</p>
+          </div>
+          <button id="addRule" class="button secondary">添加规则</button>
+        </div>
+        <div id="rules" class="rule-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="row actions">
+          <button id="saveConfig" class="button primary">保存配置</button>
+          <span id="status" class="status">等待操作</span>
+        </div>
+      </section>
+    </main>
+
+    <template id="ruleTemplate">
+      <article class="rule-card">
+        <div class="grid four">
+          <label>
+            <span>启用</span>
+            <select data-field="enabled">
+              <option value="true">开启</option>
+              <option value="false">关闭</option>
+            </select>
+          </label>
+          <label>
+            <span>货币</span>
+            <select data-field="currency"></select>
+          </label>
+          <label>
+            <span>字段</span>
+            <select data-field="field">
+              <option value="buy">现汇买入价</option>
+              <option value="sell">现汇卖出价</option>
+            </select>
+          </label>
+          <label>
+            <span>条件</span>
+            <select data-field="operator">
+              <option value="gt">大于</option>
+              <option value="lt">小于</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid two">
+          <label>
+            <span>阈值</span>
+            <input data-field="threshold" type="number" step="0.0001" placeholder="例如 930">
+          </label>
+          <div class="rule-actions">
+            <button type="button" class="button danger" data-action="remove">删除规则</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,69 +1,142 @@
-# 中国银行多货币汇率监控
+# 中国银行汇率监控控制台
 
-通过 GitHub Actions 自动监测中国银行外汇牌价，支持多货币监控：
+这个仓库现在包含一套完整的 `GitHub Pages + Cloudflare Worker + GitHub Actions` 方案：
 
-## 监控规则
+- `web/`：托管到 GitHub Pages 的管理界面
+- `worker/`：托管到 Cloudflare Worker 的配置 API
+- `monitor_action.py`：GitHub Actions 定时执行的监控脚本
 
-| 货币 | 监控条件 | 触发邮件 |
-|------|----------|----------|
-| 💷 英镑 (GBP) | 现汇买入价 > 阈值 | 发送英镑提醒 |
-| 💷 英镑 (GBP) | 现汇卖出价 < 阈值 | 发送英镑提醒 |
-| 💴 日元 (JPY) | 现汇卖出价 < 阈值 | 发送日元提醒 |
+## 功能
 
-**注意**：每种货币的提醒邮件独立发送，只包含该货币的信息。
+- Web 页面开启或关闭监控
+- Web 页面添加多个提醒邮箱
+- Web 页面配置多个货币监控规则
+- GitHub Actions 定时抓取中国银行外汇牌价
+- 满足阈值后通过 SMTP 发邮件
 
-## 快速开始
+## 配置模型
 
-### 1. Fork 或克隆此仓库
+Web 界面保存的是运行时配置，结构如下：
 
-### 2. 设置 Secrets
+```json
+{
+  "enabled": true,
+  "emails": ["example@gmail.com"],
+  "rules": [
+    {
+      "enabled": true,
+      "currency": "JPY",
+      "field": "sell",
+      "operator": "lt",
+      "threshold": 5.0
+    }
+  ]
+}
+```
 
-**Settings** → **Secrets and variables** → **Actions** → **Secrets**
+字段说明：
 
-| Name | Value |
-|------|-------|
-| `SENDER_EMAIL` | 你的 Gmail 邮箱 |
-| `SENDER_PASSWORD` | Gmail 应用专用密码（16位） |
-| `RECEIVER_EMAIL` | 收件邮箱（多个用逗号分隔） |
+- `enabled`：全局开关
+- `emails`：提醒收件人列表
+- `currency`：货币代码，如 `JPY`、`GBP`、`USD`
+- `field`：监控字段，`buy` 为现汇买入价，`sell` 为现汇卖出价
+- `operator`：比较方式，`gt` 为大于，`lt` 为小于
+- `threshold`：阈值
 
-### 3. 设置阈值
+## 部署步骤
 
-**Settings** → **Secrets and variables** → **Actions** → **Variables**
+### 1. 部署 Cloudflare Worker
 
-| Name | 说明 | 默认值 |
-|------|------|--------|
-| `GBP_BUY_THRESHOLD` | 英镑买入价阈值，**高于**此值发提醒 | `940` |
-| `GBP_SELL_THRESHOLD` | 英镑卖出价阈值，**低于**此值发提醒 | `930` |
-| `JPY_SELL_THRESHOLD` | 日元卖出价阈值，**低于**此值发提醒 | `5.0` |
+进入 `worker/`：
 
-### 4. 获取 Gmail 应用专用密码
+```bash
+npm install
+```
 
-1. 开启两步验证：[Google 账户安全](https://myaccount.google.com/security)
-2. 生成应用专用密码：[App Passwords](https://myaccount.google.com/apppasswords)
-3. 选择 "邮件" + "其他"，生成 16 位密码
+创建 Cloudflare KV，并把 `worker/wrangler.jsonc` 里的以下值替换掉：
 
-### 5. 启用 Actions
+- `kv_namespaces[0].id`
+- `vars.ALLOWED_ORIGIN`
+- `vars.CONFIG_API_TOKEN`
 
-- 点击 **Actions** 标签 → 启用
-- 工作流每 5 分钟自动运行
+然后部署：
 
-### 6. 手动测试
+```bash
+npx wrangler deploy
+```
 
-**Actions** → **Multi-Currency Rate Monitor** → **Run workflow**
+部署完成后，得到一个类似下面的地址：
 
-## 应用场景
+```text
+https://exchange-rate-monitor-config.<subdomain>.workers.dev/api/config
+```
 
-| 场景 | 关注货币 | 关注指标 | 阈值设置 |
-|------|----------|----------|----------|
-| 想卖英镑换人民币 | 英镑 | 现汇买入价 | 越高越好 |
-| 想买英镑 | 英镑 | 现汇卖出价 | 越低越好 |
-| 想买日元 | 日元 | 现汇卖出价 | 越低越好 |
+### 2. 配置 GitHub Actions Secrets
 
-## 数据来源
+在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions -> Secrets` 中添加：
 
-[中国银行外汇牌价](https://www.boc.cn/sourcedb/whpj/)
+- `SENDER_EMAIL`
+- `SENDER_PASSWORD`
+- `CONFIG_API_URL`
+- `CONFIG_API_TOKEN`
 
-## 分支说明
+说明：
 
-- `main`: 原始英镑监控版本
-- `feature/multi-currency`: 多货币监控版本（英镑 + 日元）
+- `SENDER_EMAIL`：发件邮箱
+- `SENDER_PASSWORD`：邮箱授权码或应用专用密码
+- `CONFIG_API_URL`：Worker 的 `/api/config` 地址
+- `CONFIG_API_TOKEN`：与 Worker 里一致的 Bearer Token
+
+### 3. 启用 GitHub Pages
+
+仓库已经包含自动部署工作流 [deploy-pages.yml](/D:/Project/exchange_rate/.github/workflows/deploy-pages.yml)。
+
+在 GitHub 仓库里：
+
+1. 进入 `Settings -> Pages`
+2. Source 选择 `GitHub Actions`
+3. 推送到 `main` 后会自动部署 `web/`
+
+### 4. 使用 Web 控制台
+
+打开 GitHub Pages 页面后：
+
+1. 填 Worker API 地址
+2. 填管理 Token
+3. 点“读取配置”
+4. 修改开关、邮箱、规则
+5. 点“保存配置”
+
+## 监控脚本行为
+
+[monitor_action.py](/D:/Project/exchange_rate/monitor_action.py#L46) 每次执行时会先从 Worker 拉配置，再访问中国银行外汇牌价，并按规则判断是否发信。
+
+支持的货币代码当前包括：
+
+- `GBP`
+- `JPY`
+- `USD`
+- `EUR`
+- `HKD`
+- `AUD`
+- `CAD`
+- `SGD`
+
+## 目录结构
+
+```text
+.
+├─ .github/workflows/
+│  ├─ deploy-pages.yml
+│  └─ monitor.yml
+├─ web/
+│  ├─ app.js
+│  ├─ index.html
+│  └─ styles.css
+├─ worker/
+│  ├─ package.json
+│  ├─ wrangler.jsonc
+│  └─ src/index.js
+├─ monitor_action.py
+└─ requirements.txt
+```

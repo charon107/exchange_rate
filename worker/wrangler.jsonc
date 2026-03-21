@@ -1,0 +1,15 @@
+{
+  "name": "exchange-rate-monitor-config",
+  "main": "src/index.js",
+  "compatibility_date": "2026-03-21",
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG_KV",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGIN": "https://REPLACE_WITH_YOUR_GITHUB_USERNAME.github.io",
+    "CONFIG_API_TOKEN": "REPLACE_WITH_A_LONG_RANDOM_TOKEN"
+  }
+}

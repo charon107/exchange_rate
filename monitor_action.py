@@ -1,412 +1,401 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-GitHub Actions 版本 - 中国银行多货币汇率监控
-支持英镑(GBP)和日元(JPY)汇率监控
-- 英镑：监控现汇买入价（高于阈值提醒）和现汇卖出价（低于阈值提醒）
-- 日元：监控现汇卖出价（低于阈值提醒）
+GitHub Actions 版本 - 中国银行汇率监控
+
+运行方式:
+1. 从 Cloudflare Worker 拉取运行时配置
+2. 抓取中国银行外汇牌价
+3. 按规则判断是否触发提醒
+4. 通过 SMTP 发送邮件
 """
 
 import os
+import smtplib
+import ssl
 import sys
+import time
+from datetime import datetime
+from email.header import Header
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 import requests
 from bs4 import BeautifulSoup
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.header import Header
-from datetime import datetime
-import ssl
 
 
-# 货币配置
 CURRENCY_CONFIG = {
-    'GBP': {
-        'name': '英镑',
-        'name_en': 'GBP (British Pound)',
-        'symbol': '💷'
-    },
-    'JPY': {
-        'name': '日元',
-        'name_en': 'JPY (Japanese Yen)',
-        'symbol': '💴'
-    }
+    "GBP": {"name": "英镑", "name_en": "British Pound", "symbol": "GBP"},
+    "JPY": {"name": "日元", "name_en": "Japanese Yen", "symbol": "JPY"},
+    "USD": {"name": "美元", "name_en": "US Dollar", "symbol": "USD"},
+    "EUR": {"name": "欧元", "name_en": "Euro", "symbol": "EUR"},
+    "HKD": {"name": "港币", "name_en": "Hong Kong Dollar", "symbol": "HKD"},
+    "AUD": {"name": "澳大利亚元", "name_en": "Australian Dollar", "symbol": "AUD"},
+    "CAD": {"name": "加拿大元", "name_en": "Canadian Dollar", "symbol": "CAD"},
+    "SGD": {"name": "新加坡元", "name_en": "Singapore Dollar", "symbol": "SGD"},
 }
+
+FIELD_LABELS = {
+    "buy": "现汇买入价",
+    "sell": "现汇卖出价",
+}
+
+OPERATOR_LABELS = {
+    "gt": ">",
+    "lt": "<",
+}
+
+
+def fetch_runtime_config():
+    """从远端配置 API 拉取配置。"""
+    api_url = os.environ.get("CONFIG_API_URL")
+    api_token = os.environ.get("CONFIG_API_TOKEN")
+
+    if not api_url:
+        print("[ERROR] CONFIG_API_URL is required")
+        sys.exit(1)
+
+    headers = {"Accept": "application/json"}
+    if api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
+
+    try:
+        response = requests.get(api_url, headers=headers, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        print(f"[ERROR] Failed to fetch runtime config: {exc}")
+        sys.exit(1)
+
+    config = payload.get("config") if isinstance(payload, dict) else None
+    if not isinstance(config, dict):
+        print("[ERROR] Config API returned invalid payload")
+        sys.exit(1)
+
+    return config
 
 
 def get_boc_exchange_rates():
     """
-    从中国银行获取所有货币的汇率数据
-    返回: dict {货币名称: {'buy': 买入价, 'sell': 卖出价, 'update_time': 更新时间}}
+    从中国银行获取汇率数据。
+    返回:
+        {
+            'GBP': {
+                'buy': 923.1,
+                'sell': 930.2,
+                'currency_name': '英镑',
+                'update_time': '2026-03-21 10:00:00'
+            }
+        }
     """
     url = "https://www.boc.cn/sourcedb/whpj/"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36"
+        )
     }
-    
+
     rates = {}
-    
+
     try:
         response = requests.get(url, headers=headers, timeout=30)
-        response.encoding = 'utf-8'
-        
-        if response.status_code != 200:
-            print(f"[ERROR] Request failed, status: {response.status_code}")
-            return rates
-        
-        soup = BeautifulSoup(response.text, 'lxml')
+        response.raise_for_status()
+        response.encoding = "utf-8"
+    except Exception as exc:
+        print(f"[ERROR] Failed to request BOC page: {exc}")
+        return rates
+
+    try:
+        soup = BeautifulSoup(response.text, "lxml")
         main_div = soup.find("div", class_="BOC_main")
-        
         if not main_div:
             print("[ERROR] BOC_main not found")
             return rates
-        
-        # 找到包含汇率数据的表格
-        tables = main_div.find_all("table")
+
         target_table = None
-        for table in tables:
+        for table in main_div.find_all("table"):
             if table.find("th"):
                 target_table = table
                 break
-        
+
         if not target_table:
             print("[ERROR] Rate table not found")
             return rates
-        
+
         rows = target_table.find_all("tr")
-        
-        # 表格结构:
-        # 第0列: 货币名称
-        # 第1列: 现汇买入价
-        # 第2列: 现钞买入价
-        # 第3列: 现汇卖出价
-        # 第4列: 现钞卖出价
-        # 第5列: 中行折算价
-        # 第6列: 发布日期时间
-        
         for row in rows:
             cols = row.find_all("td")
-            if cols and len(cols) >= 7:
-                currency_name = cols[0].text.strip()
-                buy_rate_str = cols[1].text.strip()
-                sell_rate_str = cols[3].text.strip()
-                update_time = cols[6].text.strip() if len(cols) > 6 else "Unknown"
-                
-                buy_rate = None
-                sell_rate = None
-                
-                if buy_rate_str:
-                    try:
-                        buy_rate = float(buy_rate_str)
-                    except ValueError:
-                        pass
-                
-                if sell_rate_str:
-                    try:
-                        sell_rate = float(sell_rate_str)
-                    except ValueError:
-                        pass
-                
-                # 识别货币类型
-                currency_code = None
-                if "英镑" in currency_name or "Ӣ" in currency_name:
-                    currency_code = 'GBP'
-                elif "日元" in currency_name:
-                    currency_code = 'JPY'
-                
-                if currency_code:
-                    rates[currency_code] = {
-                        'buy': buy_rate,
-                        'sell': sell_rate,
-                        'update_time': update_time
-                    }
-        
-        return rates
-        
-    except Exception as e:
-        print(f"[ERROR] Exception: {e}")
-        return rates
+            if len(cols) < 7:
+                continue
+
+            currency_name = cols[0].get_text(strip=True)
+            currency_code = match_currency_code(currency_name)
+            if not currency_code:
+                continue
+
+            buy_rate = parse_float(cols[1].get_text(strip=True))
+            sell_rate = parse_float(cols[3].get_text(strip=True))
+            date_part = cols[6].get_text(strip=True)
+            time_part = cols[7].get_text(strip=True) if len(cols) > 7 else ""
+            update_time = f"{date_part} {time_part}".strip() or "Unknown"
+
+            rates[currency_code] = {
+                "buy": buy_rate,
+                "sell": sell_rate,
+                "currency_name": currency_name,
+                "update_time": update_time,
+            }
+    except Exception as exc:
+        print(f"[ERROR] Failed to parse BOC page: {exc}")
+        return {}
+
+    return rates
 
 
-def send_currency_alert(currency_code, alert_type, rate, threshold, update_time, 
-                        sender_email, sender_password, receiver_emails, all_rates):
-    """
-    发送货币汇率提醒邮件
-    currency_code: 'GBP' 或 'JPY'
-    alert_type: 'buy_high' 或 'sell_low'
-    """
+def match_currency_code(currency_name):
+    for code, config in CURRENCY_CONFIG.items():
+        if config["name"] in currency_name:
+            return code
+    return None
+
+
+def parse_float(raw_value):
+    if not raw_value:
+        return None
     try:
-        config = CURRENCY_CONFIG.get(currency_code, {})
-        currency_name = config.get('name', currency_code)
-        currency_name_en = config.get('name_en', currency_code)
-        currency_symbol = config.get('symbol', '💱')
-        
-        msg = MIMEMultipart('alternative')
-        msg['From'] = Header(f"Rate Monitor <{sender_email}>", 'utf-8')
-        msg['To'] = Header(", ".join(receiver_emails), 'utf-8')
-        
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 获取该货币的完整汇率信息
-        currency_rates = all_rates.get(currency_code, {})
-        buy_rate = currency_rates.get('buy', 'N/A')
-        sell_rate = currency_rates.get('sell', 'N/A')
-        
-        if alert_type == 'buy_high':
-            subject = f"[{currency_code} BUY ALERT] {currency_name}现汇买入价 {rate} > {threshold}"
-            alert_message = f"{currency_name}现汇买入价 {rate} 已超过阈值 {threshold}"
-            alert_color = "#e74c3c"
-            rate_label = "现汇买入价"
-            condition = f"> {threshold}"
-        else:  # sell_low
-            subject = f"[{currency_code} SELL ALERT] {currency_name}现汇卖出价 {rate} < {threshold}"
-            alert_message = f"{currency_name}现汇卖出价 {rate} 已低于阈值 {threshold}"
-            alert_color = "#3498db"
-            rate_label = "现汇卖出价"
-            condition = f"< {threshold}"
-        
-        msg['Subject'] = Header(subject, 'utf-8')
-        
-        text_content = f"""
-{currency_symbol} {currency_name} ({currency_code}) 汇率提醒
+        return float(raw_value)
+    except ValueError:
+        return None
 
-提醒类型: {alert_type.upper()}
-{rate_label}: {rate}
-阈值条件: {condition}
+
+def normalize_config(config):
+    enabled = bool(config.get("enabled", False))
+    emails = [email.strip() for email in config.get("emails", []) if str(email).strip()]
+    rules = []
+
+    for item in config.get("rules", []):
+        if not isinstance(item, dict):
+            continue
+
+        try:
+            threshold = float(item.get("threshold"))
+        except (TypeError, ValueError):
+            continue
+
+        currency = str(item.get("currency", "")).upper()
+        field = item.get("field")
+        operator = item.get("operator")
+
+        if currency not in CURRENCY_CONFIG:
+            continue
+        if field not in FIELD_LABELS:
+            continue
+        if operator not in OPERATOR_LABELS:
+            continue
+
+        rules.append(
+            {
+                "enabled": bool(item.get("enabled", True)),
+                "currency": currency,
+                "field": field,
+                "operator": operator,
+                "threshold": threshold,
+            }
+        )
+
+    return {"enabled": enabled, "emails": emails, "rules": rules}
+
+
+def evaluate_rule(rule, rates):
+    currency_code = rule["currency"]
+    rate_info = rates.get(currency_code)
+    if not rate_info:
+        return False, None
+
+    rate_value = rate_info.get(rule["field"])
+    if rate_value is None:
+        return False, rate_info
+
+    if rule["operator"] == "gt":
+        return rate_value > rule["threshold"], rate_info
+    return rate_value < rule["threshold"], rate_info
+
+
+def send_rule_alert(rule, rate_info, sender_email, sender_password, receiver_emails):
+    """发送规则命中的提醒邮件。"""
+    currency_code = rule["currency"]
+    currency_meta = CURRENCY_CONFIG[currency_code]
+    rate_value = rate_info.get(rule["field"])
+    threshold = rule["threshold"]
+    field_label = FIELD_LABELS[rule["field"]]
+    operator_label = OPERATOR_LABELS[rule["operator"]]
+    update_time = rate_info.get("update_time", "Unknown")
+    current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    subject = (
+        f"[Rate Alert] {currency_code} {field_label} "
+        f"{rate_value} {operator_label} {threshold}"
+    )
+    summary = (
+        f"{currency_meta['name']} {field_label} {rate_value} "
+        f"已满足阈值条件 {operator_label} {threshold}"
+    )
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = Header(f"Rate Monitor <{sender_email}>", "utf-8")
+    msg["To"] = Header(", ".join(receiver_emails), "utf-8")
+    msg["Subject"] = Header(subject, "utf-8")
+
+    text_content = f"""
+汇率提醒
+
+货币: {currency_meta['name']} ({currency_code})
+监控字段: {field_label}
+当前值: {rate_value}
+触发条件: {operator_label} {threshold}
 中国银行更新时间: {update_time}
 检测时间: {current_time}
 
-{currency_name}当前汇率:
-- 现汇买入价: {buy_rate}
-- 现汇卖出价: {sell_rate}
+当前货币信息:
+- 现汇买入价: {rate_info.get('buy')}
+- 现汇卖出价: {rate_info.get('sell')}
 
-{alert_message}
+{summary}
 
 数据来源: 中国银行外汇牌价
 https://www.boc.cn/sourcedb/whpj/
-
----
-由 GitHub Actions 自动发送
 """
-        
-        html_content = f"""
+
+    html_content = f"""
 <html>
-<body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <h2 style="color: {alert_color}; border-bottom: 2px solid {alert_color}; padding-bottom: 10px;">
-            {currency_symbol} {currency_name} ({currency_code}) 汇率提醒
-        </h2>
-        
-        <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
-            <p style="margin: 0; font-size: 24px; color: #856404; text-align: center;">
-                <strong>{rate_label}: <span style="color: {alert_color}; font-size: 32px;">{rate}</span></strong>
-            </p>
-            <p style="margin: 10px 0 0 0; text-align: center; color: #666;">
-                阈值条件: {condition}
-            </p>
-        </div>
-        
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">货币:</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>{currency_name_en}</strong></td>
-            </tr>
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">现汇买入价:</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>{buy_rate}</strong></td>
-            </tr>
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">现汇卖出价:</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>{sell_rate}</strong></td>
-            </tr>
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">中国银行更新时间:</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>{update_time}</strong></td>
-            </tr>
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">检测时间:</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>{current_time}</strong></td>
-            </tr>
-        </table>
-        
-        <p style="color: {alert_color}; font-weight: bold; font-size: 16px;">
-            ⚠️ {alert_message}
-        </p>
-        
-        <p style="color: #666; font-size: 12px; margin-top: 30px;">
-            数据来源: <a href="https://www.boc.cn/sourcedb/whpj/" style="color: #3498db;">中国银行外汇牌价</a>
-        </p>
-        
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="color: #999; font-size: 11px; text-align: center;">
-            由 GitHub Actions 自动发送
-        </p>
+  <body style="font-family: Arial, sans-serif; background: #f6f7fb; padding: 24px;">
+    <div style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 24px;">
+      <h2 style="margin-top: 0;">汇率提醒</h2>
+      <p><strong>货币:</strong> {currency_meta['name']} ({currency_code})</p>
+      <p><strong>监控字段:</strong> {field_label}</p>
+      <p><strong>当前值:</strong> {rate_value}</p>
+      <p><strong>触发条件:</strong> {operator_label} {threshold}</p>
+      <p><strong>中国银行更新时间:</strong> {update_time}</p>
+      <p><strong>检测时间:</strong> {current_time}</p>
+      <hr style="border: 0; border-top: 1px solid #e5e7eb;">
+      <p><strong>现汇买入价:</strong> {rate_info.get('buy')}</p>
+      <p><strong>现汇卖出价:</strong> {rate_info.get('sell')}</p>
+      <p style="color: #0f766e;"><strong>{summary}</strong></p>
+      <p>数据来源: <a href="https://www.boc.cn/sourcedb/whpj/">中国银行外汇牌价</a></p>
     </div>
-</body>
+  </body>
 </html>
 """
-        
-        msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
-        msg.attach(MIMEText(html_content, 'html', 'utf-8'))
-        
-        # 根据发件邮箱自动选择 SMTP 服务器
-        if "gmail.com" in sender_email:
-            smtp_server = "smtp.gmail.com"
-            smtp_port = 587
-            use_tls = True
-        else:
-            smtp_server = "smtp.qq.com"
-            smtp_port = 465
-            use_tls = False
-        
-        # 发送邮件（带重试机制）
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                context = ssl.create_default_context()
-                
-                if use_tls:
-                    server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
-                    server.starttls(context=context)
-                else:
-                    server = smtplib.SMTP_SSL(smtp_server, smtp_port, context=context, timeout=30)
-                
-                server.login(sender_email, sender_password)
-                server.sendmail(sender_email, receiver_emails, msg.as_string())
-                server.quit()
-                
-                print(f"[OK] {currency_code} alert email sent via {smtp_server}")
-                return True
-            except (smtplib.SMTPServerDisconnected, ConnectionError, TimeoutError, OSError) as e:
-                print(f"[WARN] Attempt {attempt + 1}/{max_retries} failed: {e}")
-                if attempt < max_retries - 1:
-                    import time
-                    time.sleep(5)
-                    continue
-                else:
-                    print(f"[ERROR] All {max_retries} attempts failed")
-                    return False
-        
-        return False
-        
-    except smtplib.SMTPAuthenticationError:
-        print("[ERROR] SMTP auth failed, check email and password")
-        return False
-    except Exception as e:
-        print(f"[ERROR] Send email failed: {e}")
-        return False
+
+    msg.attach(MIMEText(text_content, "plain", "utf-8"))
+    msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+    if "gmail.com" in sender_email:
+        smtp_server = "smtp.gmail.com"
+        smtp_port = 587
+        use_tls = True
+    else:
+        smtp_server = "smtp.qq.com"
+        smtp_port = 465
+        use_tls = False
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            context = ssl.create_default_context()
+            if use_tls:
+                server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+                server.starttls(context=context)
+            else:
+                server = smtplib.SMTP_SSL(
+                    smtp_server, smtp_port, context=context, timeout=30
+                )
+
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, receiver_emails, msg.as_string())
+            server.quit()
+            print(f"[OK] Alert email sent for {currency_code}")
+            return True
+        except (smtplib.SMTPServerDisconnected, ConnectionError, TimeoutError, OSError) as exc:
+            print(f"[WARN] Attempt {attempt + 1}/{max_retries} failed: {exc}")
+            if attempt < max_retries - 1:
+                time.sleep(5)
+                continue
+            print(f"[ERROR] All {max_retries} attempts failed")
+            return False
+        except smtplib.SMTPAuthenticationError:
+            print("[ERROR] SMTP auth failed, check email credentials")
+            return False
+        except Exception as exc:
+            print(f"[ERROR] Send email failed: {exc}")
+            return False
+
+    return False
 
 
 def main():
-    """主函数"""
-    # 从环境变量读取配置
-    sender_email = os.environ.get('SENDER_EMAIL')
-    sender_password = os.environ.get('SENDER_PASSWORD')
-    receiver_email_str = os.environ.get('RECEIVER_EMAIL')
-    
-    # 英镑阈值
-    gbp_buy_threshold = float(os.environ.get('GBP_BUY_THRESHOLD', '940'))
-    gbp_sell_threshold = float(os.environ.get('GBP_SELL_THRESHOLD', '930'))
-    
-    # 日元阈值（只监控卖出价，低于此值提醒）
-    jpy_sell_threshold = float(os.environ.get('JPY_SELL_THRESHOLD', '5.0'))
-    
-    # 检查必要的环境变量
-    if not sender_email or not sender_password or not receiver_email_str:
-        print("[ERROR] Please set SENDER_EMAIL, SENDER_PASSWORD, and RECEIVER_EMAIL in GitHub Secrets")
+    sender_email = os.environ.get("SENDER_EMAIL")
+    sender_password = os.environ.get("SENDER_PASSWORD")
+
+    if not sender_email or not sender_password:
+        print("[ERROR] SENDER_EMAIL and SENDER_PASSWORD are required")
         sys.exit(1)
-    
-    # 解析多个收件人
-    receiver_emails = [email.strip() for email in receiver_email_str.split(',') if email.strip()]
-    if not receiver_emails:
-        print("[ERROR] No valid receiver email found")
-        sys.exit(1)
-    
-    print("=" * 60)
-    print("Multi-Currency Exchange Rate Monitor (GitHub Actions)")
-    print("=" * 60)
-    print(f"Receivers: {', '.join(receiver_emails)} ({len(receiver_emails)} total)")
-    print("-" * 60)
-    print("GBP (英镑) Thresholds:")
-    print(f"  - Buy > {gbp_buy_threshold} (alert if higher)")
-    print(f"  - Sell < {gbp_sell_threshold} (alert if lower)")
-    print("JPY (日元) Thresholds:")
-    print(f"  - Sell < {jpy_sell_threshold} (alert if lower)")
-    print("=" * 60)
-    
-    # 获取所有汇率
+
+    raw_config = fetch_runtime_config()
+    config = normalize_config(raw_config)
+
+    print("=" * 70)
+    print("Exchange Rate Monitor")
+    print("=" * 70)
+    print(f"Monitor enabled: {config['enabled']}")
+    print(f"Receiver count: {len(config['emails'])}")
+    print(f"Rule count: {len(config['rules'])}")
+    print("-" * 70)
+
+    if not config["enabled"]:
+        print("[INFO] Monitoring is disabled in remote config")
+        return
+
+    if not config["emails"]:
+        print("[INFO] No receiver emails configured")
+        return
+
+    active_rules = [rule for rule in config["rules"] if rule["enabled"]]
+    if not active_rules:
+        print("[INFO] No active rules configured")
+        return
+
     rates = get_boc_exchange_rates()
-    
     if not rates:
         print("[ERROR] Failed to get exchange rates")
         sys.exit(1)
-    
-    # 显示获取到的汇率
-    print("\nCurrent Exchange Rates (Bank of China):")
-    print("-" * 60)
-    
-    for code in ['GBP', 'JPY']:
-        if code in rates:
-            r = rates[code]
-            config = CURRENCY_CONFIG.get(code, {})
-            print(f"{config.get('symbol', '')} {config.get('name', code)} ({code}):")
-            print(f"    Buy Rate (Spot):  {r['buy']}")
-            print(f"    Sell Rate (Spot): {r['sell']}")
-            print(f"    Update Time: {r['update_time']}")
-        else:
-            print(f"[WARN] {code} rate not found")
-    
-    print("=" * 60)
-    
+
+    print("Current Exchange Rates:")
+    for code, info in rates.items():
+        print(
+            f"- {code}: buy={info.get('buy')} sell={info.get('sell')} "
+            f"updated={info.get('update_time')}"
+        )
+
     alerts_sent = 0
+    for rule in active_rules:
+        matched, rate_info = evaluate_rule(rule, rates)
+        print(
+            f"[CHECK] {rule['currency']} {FIELD_LABELS[rule['field']]} "
+            f"{OPERATOR_LABELS[rule['operator']]} {rule['threshold']} -> {matched}"
+        )
+        if matched and rate_info:
+            if send_rule_alert(
+                rule,
+                rate_info,
+                sender_email=sender_email,
+                sender_password=sender_password,
+                receiver_emails=config["emails"],
+            ):
+                alerts_sent += 1
 
-    # ========== 英镑监控 ==========
-    # 注意：英镑监控已禁用，如需启用请将下面的 False 改为 True
-    GBP_MONITOR_ENABLED = False
-
-    if GBP_MONITOR_ENABLED and 'GBP' in rates:
-        gbp = rates['GBP']
-        gbp_buy = gbp['buy']
-        gbp_sell = gbp['sell']
-        gbp_time = gbp['update_time']
-        
-        # 检查英镑买入价
-        if gbp_buy is not None and gbp_buy > gbp_buy_threshold:
-            print(f"\n[ALERT] GBP Buy {gbp_buy} > {gbp_buy_threshold}, sending email...")
-            if send_currency_alert('GBP', 'buy_high', gbp_buy, gbp_buy_threshold, 
-                                   gbp_time, sender_email, sender_password, 
-                                   receiver_emails, rates):
-                alerts_sent += 1
-        else:
-            print(f"[OK] GBP Buy {gbp_buy} <= {gbp_buy_threshold}")
-        
-        # 检查英镑卖出价
-        if gbp_sell is not None and gbp_sell < gbp_sell_threshold:
-            print(f"[ALERT] GBP Sell {gbp_sell} < {gbp_sell_threshold}, sending email...")
-            if send_currency_alert('GBP', 'sell_low', gbp_sell, gbp_sell_threshold,
-                                   gbp_time, sender_email, sender_password,
-                                   receiver_emails, rates):
-                alerts_sent += 1
-        else:
-            print(f"[OK] GBP Sell {gbp_sell} >= {gbp_sell_threshold}")
-    
-    # ========== 日元监控 ==========
-    if 'JPY' in rates:
-        jpy = rates['JPY']
-        jpy_sell = jpy['sell']
-        jpy_time = jpy['update_time']
-        
-        # 只检查日元卖出价（低于阈值提醒，适合买入日元的场景）
-        if jpy_sell is not None and jpy_sell < jpy_sell_threshold:
-            print(f"\n[ALERT] JPY Sell {jpy_sell} < {jpy_sell_threshold}, sending email...")
-            if send_currency_alert('JPY', 'sell_low', jpy_sell, jpy_sell_threshold,
-                                   jpy_time, sender_email, sender_password,
-                                   receiver_emails, rates):
-                alerts_sent += 1
-        else:
-            print(f"[OK] JPY Sell {jpy_sell} >= {jpy_sell_threshold}")
-    
-    print("\n" + "=" * 60)
+    print("-" * 70)
     print(f"Done. Total alerts sent: {alerts_sent}")
 
 
