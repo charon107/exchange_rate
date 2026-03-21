@@ -13,6 +13,17 @@ const DEFAULT_CONFIG = {
   updatedAt: null,
 };
 
+const CURRENCY_NAME_MAP = {
+  GBP: "英镑",
+  JPY: "日元",
+  USD: "美元",
+  EUR: "欧元",
+  HKD: "港币",
+  AUD: "澳大利亚元",
+  CAD: "加拿大元",
+  SGD: "新加坡元",
+};
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -25,12 +36,21 @@ export default {
       return json({ ok: true }, 200, env, request);
     }
 
-    if (url.pathname !== "/api/config") {
+    if (!["/api/config", "/api/rates"].includes(url.pathname)) {
       return json({ error: "Not Found" }, 404, env, request);
     }
 
     if (!isAuthorized(request, env)) {
       return json({ error: "Unauthorized" }, 401, env, request);
+    }
+
+    if (url.pathname === "/api/rates") {
+      if (request.method !== "GET") {
+        return json({ error: "Method Not Allowed" }, 405, env, request);
+      }
+
+      const rates = await fetchBocRates();
+      return json({ rates }, 200, env, request);
     }
 
     if (request.method === "GET") {
@@ -57,6 +77,65 @@ export default {
     return json({ error: "Method Not Allowed" }, 405, env, request);
   },
 };
+
+async function fetchBocRates() {
+  const response = await fetch("https://www.boc.cn/sourcedb/whpj/", {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch BOC page: HTTP ${response.status}`);
+  }
+
+  const html = await response.text();
+  const rows = html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+  const rates = {};
+
+  for (const row of rows) {
+    const cols = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((match) =>
+      sanitizeCell(match[1]),
+    );
+
+    if (cols.length < 7) {
+      continue;
+    }
+
+    const currencyCode = matchCurrencyCode(cols[0]);
+    if (!currencyCode) {
+      continue;
+    }
+
+    rates[currencyCode] = {
+      currencyName: cols[0],
+      buy: parseNumber(cols[1]),
+      sell: parseNumber(cols[3]),
+      updateTime: [cols[6], cols[7]].filter(Boolean).join(" ").trim(),
+    };
+  }
+
+  return rates;
+}
+
+function matchCurrencyCode(name) {
+  return Object.entries(CURRENCY_NAME_MAP).find(([, value]) => name.includes(value))?.[0] || null;
+}
+
+function sanitizeCell(value) {
+  return value
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 async function readConfig(env) {
   const stored = await env.CONFIG_KV.get("monitor-config");

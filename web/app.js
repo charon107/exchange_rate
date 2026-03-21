@@ -10,8 +10,14 @@ const currencyOptions = [
 ];
 const CONFIG_API_URL =
   "https://exchange-rate-monitor-config.sgzli54charon107.workers.dev/api/config";
+const CONFIG_RATES_URL =
+  "https://exchange-rate-monitor-config.sgzli54charon107.workers.dev/api/rates";
 const CONFIG_API_TOKEN =
   "cfut_rkiYob78uUu11mpr4LxRMWEzqY5nwGPwY0qZs6yP1e6835c4";
+const FIELD_LABELS = {
+  buy: "现汇买入价",
+  sell: "现汇卖出价",
+};
 
 const defaultConfig = {
   enabled: true,
@@ -26,6 +32,8 @@ const defaultConfig = {
     },
   ],
 };
+
+let latestRates = {};
 
 const els = {
   enabled: document.querySelector("#enabled"),
@@ -59,6 +67,7 @@ function bootstrap() {
   });
 
   els.saveConfig.addEventListener("click", saveConfig);
+  loadRates();
   loadConfig();
 }
 
@@ -103,6 +112,7 @@ function appendRule(rule) {
   const fragment = els.ruleTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".rule-card");
   const currencySelect = card.querySelector('[data-field="currency"]');
+  const fieldSelect = card.querySelector('[data-field="field"]');
 
   currencyOptions.forEach((currency) => {
     const option = document.createElement("option");
@@ -117,11 +127,16 @@ function appendRule(rule) {
   card.querySelector('[data-field="operator"]').value = rule.operator;
   card.querySelector('[data-field="threshold"]').value = rule.threshold;
 
+  const refreshReference = () => updateRuleReference(card);
+  currencySelect.addEventListener("change", refreshReference);
+  fieldSelect.addEventListener("change", refreshReference);
+
   card.querySelector('[data-action="remove"]').addEventListener("click", () => {
     card.remove();
   });
 
   els.rules.appendChild(fragment);
+  updateRuleReference(els.rules.lastElementChild);
 }
 
 function readFormConfig() {
@@ -148,6 +163,59 @@ function writeFormConfig(config) {
   els.enabled.checked = Boolean(config.enabled);
   renderEmails(config.emails || []);
   renderRules(config.rules || []);
+}
+
+async function loadRates() {
+  try {
+    const response = await fetch(CONFIG_RATES_URL, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${CONFIG_API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    latestRates = payload.rates || {};
+    refreshAllRuleReferences();
+  } catch (error) {
+    latestRates = {};
+    refreshAllRuleReferences(`参考值获取失败: ${error.message}`);
+  }
+}
+
+function refreshAllRuleReferences(errorMessage = "") {
+  Array.from(els.rules.querySelectorAll(".rule-card")).forEach((card) => {
+    updateRuleReference(card, errorMessage);
+  });
+}
+
+function updateRuleReference(card, errorMessage = "") {
+  const thresholdInput = card.querySelector('[data-field="threshold"]');
+  if (!thresholdInput) {
+    return;
+  }
+
+  if (errorMessage) {
+    thresholdInput.placeholder = errorMessage;
+    return;
+  }
+
+  const currency = card.querySelector('[data-field="currency"]').value;
+  const field = card.querySelector('[data-field="field"]').value;
+  const rateInfo = latestRates[currency];
+  const rateValue = rateInfo?.[field];
+
+  if (!rateInfo || rateValue === null || rateValue === undefined) {
+    thresholdInput.placeholder = "暂无当前参考值";
+    return;
+  }
+
+  const updateTime = rateInfo.updateTime ? `，更新时间 ${rateInfo.updateTime}` : "";
+  thresholdInput.placeholder = `${currency} ${FIELD_LABELS[field]} ${rateValue}${updateTime}`;
 }
 
 async function loadConfig() {
