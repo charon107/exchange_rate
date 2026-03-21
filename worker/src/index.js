@@ -8,6 +8,7 @@ const DEFAULT_CONFIG = {
       field: "sell",
       operator: "lt",
       threshold: 5.0,
+      emails: [],
     },
   ],
   updatedAt: null,
@@ -188,6 +189,9 @@ function validateConfig(payload) {
       field: item.field,
       operator: item.operator,
       threshold,
+      emails: Array.isArray(item.emails)
+        ? item.emails.map((email) => String(email).trim()).filter(Boolean)
+        : [],
     });
   }
 

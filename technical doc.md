@@ -1,472 +1,311 @@
-# 技术文档：中国银行英镑汇率监控系统
+# 技术文档：中国银行汇率监控系统
 
-## 1. 项目概述
+## 1. 项目概览
 
-### 1.1 功能描述
+这个项目由三部分组成：
 
-本项目通过 GitHub Actions 实现 24/7 自动监控中国银行英镑外汇牌价，当汇率满足以下条件时自动发送邮件提醒：
+- `web/`：前端控制台，用户通过网页维护监控配置
+- `worker/`：Cloudflare Worker，负责存取配置并给前端提供辅助接口
+- `monitor_action.py`：GitHub Actions 定时执行的 Python 监控脚本
 
-- **现汇买入价** > 设定阈值 → 发送提醒
-- **现汇卖出价** < 设定阈值 → 发送提醒
+核心目标是：
 
-### 1.2 技术栈
-
-| 技术 | 用途 |
-|------|------|
-| Python 3.11 | 主要编程语言 |
-| requests | HTTP 请求库 |
-| BeautifulSoup4 | HTML 解析库 |
-| lxml | XML/HTML 解析引擎 |
-| smtplib | 邮件发送（Python 标准库） |
-| GitHub Actions | CI/CD 定时任务调度 |
-
-### 1.3 项目结构
-
-```
-exchange_rate/
-├── .github/
-│   └── workflows/
-│       └── monitor.yml      # GitHub Actions 工作流配置
-├── .gitignore               # Git 忽略规则
-├── monitor_action.py        # 主监控脚本
-├── requirements.txt         # Python 依赖
-├── README.md               # 使用说明
-└── TECHNICAL_DOC.md        # 技术文档（本文件）
-```
-
----
+1. 用户在网页中配置规则
+2. 配置保存到 Cloudflare KV
+3. GitHub Actions 按 cron 定时运行 Python 脚本
+4. 脚本抓取中国银行汇率页面
+5. 命中规则后按规则绑定邮箱发提醒邮件
 
 ## 2. 系统架构
 
-### 2.1 整体架构图
+### 2.1 组件职责
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      GitHub Actions                              │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                    Cron Scheduler                        │    │
-│  │                  (每5分钟触发一次)                        │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                              │                                   │
-│                              ▼                                   │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                  Ubuntu Runner                           │    │
-│  │  ┌─────────────────────────────────────────────────┐    │    │
-│  │  │              monitor_action.py                   │    │    │
-│  │  │                                                  │    │    │
-│  │  │  1. 获取汇率数据                                 │    │    │
-│  │  │  2. 判断是否触发阈值                             │    │    │
-│  │  │  3. 发送邮件提醒                                 │    │    │
-│  │  └─────────────────────────────────────────────────┘    │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-          │                                    │
-          ▼                                    ▼
-┌──────────────────┐              ┌──────────────────────┐
-│   中国银行网站    │              │    QQ邮箱 SMTP 服务   │
-│  (数据来源)       │              │    (邮件发送)         │
-└──────────────────┘              └──────────────────────┘
-```
+**前端 `web/`**
 
-### 2.2 数据流图
+- 展示控制台页面
+- 自动读取当前配置
+- 修改监控规则和邮箱绑定关系
+- 请求 Worker 保存配置
+- 请求 Worker 获取最近一次汇率参考值
 
-```
-中国银行网站                  GitHub Actions                    用户邮箱
-     │                            │                               │
-     │  ① HTTP GET 请求           │                               │
-     │<───────────────────────────│                               │
-     │                            │                               │
-     │  ② 返回 HTML 页面          │                               │
-     │───────────────────────────>│                               │
-     │                            │                               │
-     │                   ③ 解析 HTML                              │
-     │                   提取汇率数据                              │
-     │                            │                               │
-     │                   ④ 判断阈值                               │
-     │                            │                               │
-     │                   ⑤ 触发条件满足                            │
-     │                            │───────────────────────────────>│
-     │                            │  发送 SMTP 邮件                │
-     │                            │                               │
-```
+**Cloudflare Worker `worker/src/index.js`**
 
----
+- `GET /api/config`：读取配置
+- `POST /api/config`：保存配置
+- `GET /api/rates`：抓取中国银行最新汇率，返回前端用于阈值参考
+- 配置存储在 Cloudflare KV 中
 
-## 3. 核心模块实现
+**GitHub Actions + Python**
 
-### 3.1 汇率数据获取模块
+- GitHub Actions 按定时规则运行
+- 运行 `monitor_action.py`
+- Python 脚本从 Worker 读取配置
+- Python 脚本直接抓中国银行外汇牌价
+- 命中规则后通过 SMTP 发邮件
 
-#### 3.1.1 数据源
+## 3. 数据流
 
-- **URL**: `https://www.boc.cn/sourcedb/whpj/`
-- **数据格式**: HTML 表格
-- **更新频率**: 银行工作日实时更新
+### 3.1 用户配置流程
 
-#### 3.1.2 HTML 结构分析
+1. 用户打开网页
+2. 前端调用 Worker 的 `/api/config`
+3. Worker 从 KV 返回当前配置
+4. 用户修改规则与邮箱绑定
+5. 前端调用 Worker 的 `POST /api/config`
+6. Worker 将新配置写入 KV
 
-中国银行外汇牌价页面的表格结构：
+### 3.2 自动监控流程
 
-```html
-<div class="BOC_main">
-  <table>
-    <tr>
-      <th>货币名称</th>
-      <th>现汇买入价</th>
-      <th>现钞买入价</th>
-      <th>现汇卖出价</th>
-      <th>现钞卖出价</th>
-      <th>中行折算价</th>
-      <th>发布日期</th>
-      <th>发布时间</th>
-    </tr>
-    <tr>
-      <td>英镑</td>
-      <td>927.91</td>      <!-- 索引 1: 现汇买入价 -->
-      <td>927.91</td>      <!-- 索引 2: 现钞买入价 -->
-      <td>934.80</td>      <!-- 索引 3: 现汇卖出价 -->
-      <td>934.80</td>      <!-- 索引 4: 现钞卖出价 -->
-      <td>931.35</td>      <!-- 索引 5: 中行折算价 -->
-      <td>2025/11/25</td>  <!-- 索引 6: 发布日期 -->
-      <td>16:00:50</td>    <!-- 索引 7: 发布时间 -->
-    </tr>
-    ...
-  </table>
-</div>
+1. GitHub Actions 根据 cron 触发
+2. 运行 `python monitor_action.py`
+3. 脚本请求 Worker `/api/config`
+4. 获取当前监控配置
+5. 抓取中国银行页面 `https://www.boc.cn/sourcedb/whpj/`
+6. 解析对应币种的买入价、卖出价、更新时间
+7. 遍历所有启用规则
+8. 若命中规则，则只向该规则绑定的邮箱发送邮件
+
+## 4. 当前配置模型
+
+当前配置结构如下：
+
+```json
+{
+  "enabled": true,
+  "emails": [
+    "a@example.com",
+    "b@example.com"
+  ],
+  "rules": [
+    {
+      "enabled": true,
+      "currency": "JPY",
+      "field": "sell",
+      "operator": "lt",
+      "threshold": 5.0,
+      "emails": [
+        "a@example.com"
+      ]
+    },
+    {
+      "enabled": true,
+      "currency": "USD",
+      "field": "buy",
+      "operator": "gt",
+      "threshold": 720.0,
+      "emails": [
+        "a@example.com",
+        "b@example.com"
+      ]
+    }
+  ]
+}
 ```
 
-#### 3.1.3 解析逻辑
+说明：
 
-```python
-def get_gbp_exchange_rates():
-    """
-    获取英镑汇率数据
-    返回: (现汇买入价, 现汇卖出价, 更新时间)
-    """
-    # 1. 发送 HTTP 请求
-    response = requests.get(url, headers=headers, timeout=30)
-    
-    # 2. 解析 HTML
-    soup = BeautifulSoup(response.text, 'lxml')
-    
-    # 3. 定位数据表格
-    main_div = soup.find("div", class_="BOC_main")
-    target_table = main_div.find("table")  # 包含 <th> 的表格
-    
-    # 4. 遍历行，查找英镑数据
-    for row in target_table.find_all("tr"):
-        cols = row.find_all("td")
-        if "英镑" in cols[0].text:
-            buy_rate = float(cols[1].text)   # 现汇买入价
-            sell_rate = float(cols[3].text)  # 现汇卖出价
-            update_time = cols[6].text       # 发布时间
-            return buy_rate, sell_rate, update_time
+- `enabled`：全局监控开关
+- `emails`：邮箱池，前端统一维护
+- `rules[].enabled`：单条规则开关
+- `rules[].currency`：币种代码
+- `rules[].field`：`buy` 或 `sell`
+- `rules[].operator`：`gt` 或 `lt`
+- `rules[].threshold`：阈值
+- `rules[].emails`：该规则绑定的邮箱列表
+
+这实现了“规则和邮箱是 n 对 n 关系”：
+
+- 一个规则可以绑定多个邮箱
+- 一个邮箱可以被多条规则复用
+
+## 5. 前端逻辑
+
+关键文件：
+
+- [web/index.html](/D:/Project/exchange_rate/web/index.html)
+- [web/app.js](/D:/Project/exchange_rate/web/app.js)
+- [web/styles.css](/D:/Project/exchange_rate/web/styles.css)
+
+当前前端行为：
+
+- 页面加载后自动调用 `loadConfig()`
+- 页面加载后自动调用 `loadRates()`
+- 阈值输入框会显示最新参考汇率作为 placeholder
+- 规则中的“启用”与页面底部“启用监控”都使用滑块样式
+- 页面内置了 Worker API 地址和访问 token
+
+## 6. Worker 接口
+
+关键文件：
+
+- [worker/src/index.js](/D:/Project/exchange_rate/worker/src/index.js)
+
+### 6.1 `GET /health`
+
+健康检查接口。
+
+返回：
+
+```json
+{
+  "ok": true
+}
 ```
 
-### 3.2 邮件发送模块
+### 6.2 `GET /api/config`
 
-#### 3.2.1 SMTP 配置
+读取当前监控配置。
 
-| 参数 | 值 |
-|------|-----|
-| 服务器 | smtp.qq.com |
-| 端口 | 465 (SSL) |
-| 加密 | SSL/TLS |
-| 认证 | 邮箱 + 授权码 |
+要求：
 
-#### 3.2.2 邮件格式
+- 需要 `Authorization: Bearer <CONFIG_API_TOKEN>`
 
-支持两种格式，邮件客户端会自动选择最佳显示方式：
+### 6.3 `POST /api/config`
 
-- **纯文本格式** (text/plain): 用于简单邮件客户端
-- **HTML 格式** (text/html): 用于现代邮件客户端，支持样式
+保存监控配置。
 
-#### 3.2.3 多收件人支持
+要求：
 
-```python
-# 解析多个收件人（逗号分隔）
-receiver_emails = [email.strip() for email in receiver_email_str.split(',')]
+- 需要 `Authorization: Bearer <CONFIG_API_TOKEN>`
 
-# 发送给多个收件人
-server.sendmail(sender_email, receiver_emails, msg.as_string())
-```
+### 6.4 `GET /api/rates`
 
-### 3.3 阈值判断逻辑
+抓取中国银行最新汇率，供前端显示参考值。
 
-```python
-# 买入价监控：高于阈值发提醒（适合卖出英镑的场景）
-if buy_rate > buy_threshold:
-    send_alert('buy_high', buy_rate, ...)
+要求：
 
-# 卖出价监控：低于阈值发提醒（适合买入英镑的场景）
-if sell_rate < sell_threshold:
-    send_alert('sell_low', sell_rate, ...)
-```
+- 需要 `Authorization: Bearer <CONFIG_API_TOKEN>`
 
-**应用场景说明**：
+## 7. Python 监控脚本逻辑
 
-| 场景 | 关注指标 | 条件 | 含义 |
-|------|----------|------|------|
-| 想卖英镑换人民币 | 现汇买入价 | 越高越好 | 银行买入你的英镑，价格高你赚得多 |
-| 想买英镑 | 现汇卖出价 | 越低越好 | 银行卖给你英镑，价格低你花得少 |
+关键文件：
 
----
+- [monitor_action.py](/D:/Project/exchange_rate/monitor_action.py)
 
-## 4. GitHub Actions 配置
+### 7.1 主要流程
 
-### 4.1 工作流配置文件
+`main()` 做的事：
+
+1. 读取 GitHub Secrets 中的邮箱配置和 Worker 配置
+2. 请求 Worker 获取当前运行时配置
+3. 如果全局监控关闭，直接结束
+4. 抓取中国银行汇率页面
+5. 遍历所有启用规则
+6. 若命中规则，只向该规则的绑定邮箱发送邮件
+
+### 7.2 汇率抓取
+
+函数：
+
+- `get_boc_exchange_rates()`
+
+从中国银行页面解析：
+
+- `buy`：现汇买入价
+- `sell`：现汇卖出价
+- `update_time`：更新时间
+
+### 7.3 规则判断
+
+函数：
+
+- `evaluate_rule()`
+
+规则判断方式：
+
+- `gt`：当前值大于阈值
+- `lt`：当前值小于阈值
+
+### 7.4 邮件发送
+
+函数：
+
+- `send_rule_alert()`
+
+行为：
+
+- 命中后生成纯文本和 HTML 两种邮件内容
+- Gmail 使用 `smtp.gmail.com:587`
+- 其他默认走 `smtp.qq.com:465`
+- 带 3 次重试
+
+## 8. GitHub Actions 调度
+
+关键文件：
+
+- [.github/workflows/monitor.yml](/D:/Project/exchange_rate/.github/workflows/monitor.yml)
+
+当前 cron：
 
 ```yaml
-# .github/workflows/monitor.yml
-
-name: GBP Rate Monitor
-
-on:
-  # 定时触发：每5分钟运行一次
-  schedule:
-    - cron: '*/5 * * * *'
-  
-  # 手动触发：用于测试
-  workflow_dispatch:
-
-jobs:
-  check-rate:
-    runs-on: ubuntu-latest
-    
-    steps:
-      # 步骤1: 检出代码
-      - uses: actions/checkout@v4
-      
-      # 步骤2: 设置 Python 环境
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      # 步骤3: 安装依赖
-      - run: pip install -r requirements.txt
-      
-      # 步骤4: 运行监控脚本
-      - run: python monitor_action.py
-        env:
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
-          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-          BUY_THRESHOLD: ${{ vars.BUY_THRESHOLD || '940' }}
-          SELL_THRESHOLD: ${{ vars.SELL_THRESHOLD || '930' }}
+schedule:
+  - cron: "*/10 1-9 * * 1-5"
 ```
 
-### 4.2 Cron 表达式说明
+含义：
 
+- 每 10 分钟运行一次
+- UTC 1:00 到 9:59
+- 周一到周五
+
+换算为北京时间，大致是：
+
+- 工作日 9:00 到 17:59
+- 每 10 分钟执行一次
+
+## 9. 邮件发送范围
+
+现在不是“所有规则命中都发给所有邮箱”，而是：
+
+- 只有命中的规则才会发信
+- 只有被该规则绑定的邮箱才会收到这封信
+
+这使得不同用户可以只接收自己关心的币种和条件。
+
+## 10. 当前已知限制
+
+### 10.1 前端内置管理 token
+
+当前前端把 Worker 的访问 token 直接写在页面代码里。  
+这意味着任何能访问页面的人都能修改配置。
+
+这适合轻量内部使用，不适合公开管理后台。
+
+### 10.2 Worker 参考值依赖实时抓取
+
+前端显示的参考值是通过 Worker 实时抓中国银行页面得到的。  
+如果中国银行页面结构变化，参考值显示可能失效。
+
+### 10.3 邮件是规则触发即发，不做去重
+
+如果某条规则在多次定时检查中持续命中，就可能在多次执行中重复发邮件。  
+当前没有“冷却时间”或“去重窗口”。
+
+## 11. 可继续扩展的方向
+
+- 为规则增加冷却时间，避免重复发信
+- 增加“测试邮件”按钮
+- 支持更多通知渠道，如 Telegram、Slack、企业微信
+- 引入真正的登录权限，而不是把 token 写在前端
+- 增加历史汇率记录和趋势图
+
+## 12. 目录结构
+
+```text
+.
+├─ .github/workflows/
+│  └─ monitor.yml
+├─ web/
+│  ├─ app.js
+│  ├─ index.html
+│  └─ styles.css
+├─ worker/
+│  ├─ package.json
+│  ├─ package-lock.json
+│  ├─ wrangler.jsonc
+│  └─ src/index.js
+├─ monitor_action.py
+├─ requirements.txt
+├─ README.md
+└─ technical doc.md
 ```
-*/5 * * * *
- │  │ │ │ │
- │  │ │ │ └── 星期几 (0-7, 0和7都是周日)
- │  │ │ └──── 月份 (1-12)
- │  │ └────── 日期 (1-31)
- │  └──────── 小时 (0-23)
- └────────── 分钟 (0-59)
-
-*/5 = 每5分钟
-*   = 每个（小时/日/月/星期）
-```
-
-### 4.3 Secrets vs Variables
-
-| 类型 | 用途 | 安全性 | 示例 |
-|------|------|--------|------|
-| Secrets | 敏感信息 | 加密存储，日志中显示为 `***` | 邮箱、密码 |
-| Variables | 非敏感配置 | 明文存储，可公开 | 阈值数字 |
-
----
-
-## 5. 安全设计
-
-### 5.1 敏感信息保护
-
-1. **GitHub Secrets 加密存储**
-   - 所有敏感信息存储在 Secrets 中
-   - 即使仓库公开，他人也无法查看
-   - Actions 日志自动遮盖敏感内容
-
-2. **代码中无硬编码敏感信息**
-   - 所有配置通过环境变量传入
-   - 代码可安全公开
-
-### 5.2 QQ 邮箱授权码
-
-使用授权码而非 QQ 密码的好处：
-- 授权码可随时撤销
-- 不影响 QQ 账号安全
-- 符合邮箱服务商安全规范
-
----
-
-## 6. 错误处理
-
-### 6.1 网络请求错误
-
-```python
-try:
-    response = requests.get(url, timeout=30)
-except requests.exceptions.RequestException as e:
-    print(f"[ERROR] Network error: {e}")
-    return None, None, None
-```
-
-### 6.2 数据解析错误
-
-```python
-try:
-    rate = float(rate_str)
-except ValueError:
-    print(f"[ERROR] Cannot parse rate: {rate_str}")
-    return None, None, None
-```
-
-### 6.3 邮件发送错误
-
-```python
-try:
-    server.sendmail(sender, receivers, msg)
-except smtplib.SMTPAuthenticationError:
-    print("[ERROR] SMTP auth failed")
-except Exception as e:
-    print(f"[ERROR] Send failed: {e}")
-```
-
----
-
-## 7. 运行时序图
-
-```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│  GitHub  │     │  Python  │     │   BOC    │     │   SMTP   │
-│  Actions │     │  Script  │     │  Website │     │  Server  │
-└────┬─────┘     └────┬─────┘     └────┬─────┘     └────┬─────┘
-     │                │                │                │
-     │ 1. 触发运行    │                │                │
-     │───────────────>│                │                │
-     │                │                │                │
-     │                │ 2. GET 请求    │                │
-     │                │───────────────>│                │
-     │                │                │                │
-     │                │ 3. HTML 响应   │                │
-     │                │<───────────────│                │
-     │                │                │                │
-     │                │ 4. 解析数据    │                │
-     │                │ 5. 判断阈值    │                │
-     │                │                │                │
-     │                │ 6. [如触发] 发送邮件            │
-     │                │───────────────────────────────>│
-     │                │                │                │
-     │                │ 7. 发送成功    │                │
-     │                │<───────────────────────────────│
-     │                │                │                │
-     │ 8. 运行完成    │                │                │
-     │<───────────────│                │                │
-     │                │                │                │
-```
-
----
-
-## 8. 性能与资源
-
-### 8.1 运行时间
-
-- 单次运行：约 **15-20 秒**
-- 主要耗时：网络请求 + Python 环境初始化
-
-### 8.2 GitHub Actions 配额
-
-| 账户类型 | 每月免费额度 |
-|----------|-------------|
-| Free | 2,000 分钟 |
-| Pro | 3,000 分钟 |
-
-**本项目用量估算**：
-- 每次运行：~0.3 分钟
-- 每天运行：288 次 × 0.3 = ~86 分钟
-- 每月运行：~2,600 分钟
-
-> ⚠️ 免费账户可能超出配额，可考虑调整为每 10-15 分钟运行一次
-
-### 8.3 优化建议
-
-如需减少配额消耗，可修改 cron 表达式：
-
-```yaml
-# 每10分钟运行一次
-- cron: '*/10 * * * *'
-
-# 每15分钟运行一次
-- cron: '*/15 * * * *'
-
-# 仅工作日运行（周一到周五）
-- cron: '*/5 * * * 1-5'
-```
-
----
-
-## 9. 扩展开发
-
-### 9.1 添加更多货币
-
-修改 `get_gbp_exchange_rates()` 函数，支持参数化货币名称：
-
-```python
-def get_exchange_rates(currency_name="英镑"):
-    for row in rows:
-        if currency_name in cols[0].text:
-            ...
-```
-
-### 9.2 添加更多通知渠道
-
-可扩展支持：
-- 企业微信机器人
-- 钉钉机器人
-- Telegram Bot
-- Slack Webhook
-
-### 9.3 添加历史数据记录
-
-可结合 GitHub Actions 的 artifacts 或外部数据库存储历史汇率数据。
-
----
-
-## 10. 常见问题
-
-### Q1: 为什么没收到邮件？
-
-1. 检查 Secrets 配置是否正确
-2. 查看 Actions 运行日志是否有错误
-3. 确认汇率是否达到触发阈值
-4. 检查邮箱垃圾箱
-
-### Q2: 授权码在哪里获取？
-
-QQ邮箱 → 设置 → 账户 → POP3/SMTP服务 → 开启 → 生成授权码
-
-### Q3: 可以监控其他货币吗？
-
-可以，修改代码中的货币名称匹配条件即可。
-
-### Q4: 运行日志中邮箱显示为 `***` 是什么？
-
-这是 GitHub 的安全机制，Secrets 的值会被自动遮盖，说明配置正确。
-
----
-
-## 11. 版本历史
-
-| 版本 | 日期 | 更新内容 |
-|------|------|----------|
-| 1.0.0 | 2025-11-25 | 初始版本，支持买入价监控 |
-| 1.1.0 | 2025-11-25 | 添加卖出价监控 |
-| 1.2.0 | 2025-11-25 | 支持多收件人 |
-
----
-
-## 12. 许可证
-
-MIT License
-

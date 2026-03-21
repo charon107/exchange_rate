@@ -172,6 +172,7 @@ def parse_float(raw_value):
 def normalize_config(config):
     enabled = bool(config.get("enabled", False))
     emails = [email.strip() for email in config.get("emails", []) if str(email).strip()]
+    email_set = set(emails)
     rules = []
 
     for item in config.get("rules", []):
@@ -201,6 +202,11 @@ def normalize_config(config):
                 "field": field,
                 "operator": operator,
                 "threshold": threshold,
+                "emails": [
+                    email.strip()
+                    for email in item.get("emails", [])
+                    if str(email).strip() and email.strip() in email_set
+                ],
             }
         )
 
@@ -349,8 +355,8 @@ def main():
     print("Exchange Rate Monitor")
     print("=" * 70)
     print(f"Monitor enabled: {config['enabled']}")
-    print(f"Receiver count: {len(config['emails'])}")
-    print(f"Rule count: {len(config['rules'])}")
+        print(f"Receiver count: {len(config['emails'])}")
+        print(f"Rule count: {len(config['rules'])}")
     print("-" * 70)
 
     if not config["enabled"]:
@@ -381,17 +387,19 @@ def main():
     alerts_sent = 0
     for rule in active_rules:
         matched, rate_info = evaluate_rule(rule, rates)
+        rule_receivers = rule.get("emails", [])
         print(
             f"[CHECK] {rule['currency']} {FIELD_LABELS[rule['field']]} "
-            f"{OPERATOR_LABELS[rule['operator']]} {rule['threshold']} -> {matched}"
+            f"{OPERATOR_LABELS[rule['operator']]} {rule['threshold']} -> {matched} "
+            f"(receivers={len(rule_receivers)})"
         )
-        if matched and rate_info:
+        if matched and rate_info and rule_receivers:
             if send_rule_alert(
                 rule,
                 rate_info,
                 sender_email=sender_email,
                 sender_password=sender_password,
-                receiver_emails=config["emails"],
+                receiver_emails=rule_receivers,
             ):
                 alerts_sent += 1
 

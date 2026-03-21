@@ -29,6 +29,7 @@ const defaultConfig = {
       field: "sell",
       operator: "lt",
       threshold: 5.0,
+      emails: [],
     },
   ],
 };
@@ -99,8 +100,12 @@ function appendEmailRow(email) {
     if (!els.emails.querySelector(".email-row")) {
       appendEmailRow("");
     }
+    refreshRuleRecipients();
   });
   els.emails.appendChild(fragment);
+  row.querySelector('[data-field="email"]').addEventListener("input", () => {
+    refreshRuleRecipients();
+  });
 }
 
 function renderRules(rules) {
@@ -122,10 +127,12 @@ function appendRule(rule) {
   });
 
   card.querySelector('[data-field="enabled"]').value = String(rule.enabled);
+  card.querySelector('[data-field="enabled"]').checked = Boolean(rule.enabled);
   card.querySelector('[data-field="currency"]').value = rule.currency;
   card.querySelector('[data-field="field"]').value = rule.field;
   card.querySelector('[data-field="operator"]').value = rule.operator;
   card.querySelector('[data-field="threshold"]').value = rule.threshold;
+  card.dataset.selectedEmails = JSON.stringify(rule.emails || []);
 
   const refreshReference = () => updateRuleReference(card);
   currencySelect.addEventListener("change", refreshReference);
@@ -136,7 +143,9 @@ function appendRule(rule) {
   });
 
   els.rules.appendChild(fragment);
-  updateRuleReference(els.rules.lastElementChild);
+  const insertedCard = els.rules.lastElementChild;
+  renderRuleRecipients(insertedCard);
+  updateRuleReference(insertedCard);
 }
 
 function readFormConfig() {
@@ -145,11 +154,14 @@ function readFormConfig() {
     .filter(Boolean);
 
   const rules = Array.from(els.rules.querySelectorAll(".rule-card")).map((card) => ({
-    enabled: card.querySelector('[data-field="enabled"]').value === "true",
+    enabled: card.querySelector('[data-field="enabled"]').checked,
     currency: card.querySelector('[data-field="currency"]').value,
     field: card.querySelector('[data-field="field"]').value,
     operator: card.querySelector('[data-field="operator"]').value,
     threshold: Number(card.querySelector('[data-field="threshold"]').value),
+    emails: Array.from(card.querySelectorAll('[data-role="rule-emails"] input:checked')).map(
+      (input) => input.value,
+    ),
   }));
 
   return {
@@ -163,6 +175,66 @@ function writeFormConfig(config) {
   els.enabled.checked = Boolean(config.enabled);
   renderEmails(config.emails || []);
   renderRules(config.rules || []);
+  refreshRuleRecipients();
+}
+
+function getAvailableEmails() {
+  return Array.from(els.emails.querySelectorAll('[data-field="email"]'))
+    .map((input) => input.value.trim())
+    .filter(Boolean);
+}
+
+function renderRuleRecipients(card) {
+  const container = card.querySelector('[data-role="rule-emails"]');
+  if (!container) {
+    return;
+  }
+
+  const availableEmails = getAvailableEmails();
+  const selectedEmails = new Set(JSON.parse(card.dataset.selectedEmails || "[]"));
+  container.innerHTML = "";
+
+  if (!availableEmails.length) {
+    const empty = document.createElement("span");
+    empty.className = "recipient-empty";
+    empty.textContent = "请先在上方添加邮箱，再为当前规则勾选收件人。";
+    container.appendChild(empty);
+    return;
+  }
+
+  availableEmails.forEach((email) => {
+    const label = document.createElement("label");
+    label.className = "recipient-chip";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = email;
+    checkbox.checked = selectedEmails.has(email);
+    checkbox.addEventListener("change", () => {
+      const nextSelected = new Set(
+        Array.from(container.querySelectorAll("input:checked")).map((input) => input.value),
+      );
+      card.dataset.selectedEmails = JSON.stringify(Array.from(nextSelected));
+    });
+
+    const text = document.createElement("span");
+    text.textContent = email;
+
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    container.appendChild(label);
+  });
+}
+
+function refreshRuleRecipients() {
+  const availableEmails = new Set(getAvailableEmails());
+  Array.from(els.rules.querySelectorAll(".rule-card")).forEach((card) => {
+    const selectedEmails = JSON.parse(card.dataset.selectedEmails || "[]").filter((email) =>
+      availableEmails.has(email),
+    );
+    card.dataset.selectedEmails = JSON.stringify(selectedEmails);
+    renderRuleRecipients(card);
+  });
 }
 
 async function loadRates() {

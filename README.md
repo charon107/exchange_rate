@@ -1,136 +1,94 @@
 # 中国银行汇率监控控制台
 
-这个仓库现在包含一套完整的 `GitHub Pages + Cloudflare Worker + GitHub Actions` 方案：
+产品网址：
 
-- `web/`：托管到 GitHub Pages 的管理界面
-- `worker/`：托管到 Cloudflare Worker 的配置 API
-- `monitor_action.py`：GitHub Actions 定时执行的监控脚本
+- https://exchange-rate-axv.pages.dev/
 
-## 功能
+## 这是做什么的
 
-- Web 页面开启或关闭监控
-- Web 页面添加多个提醒邮箱，每个输入框只填一个邮箱
-- Web 页面配置多个货币监控规则，货币选项显示中英对照
-- GitHub Actions 定时抓取中国银行外汇牌价
-- 满足阈值后通过 SMTP 发邮件
+这个网站用来配置中国银行汇率监控规则。  
+当汇率满足你设置的条件时，系统会自动给对应邮箱发送提醒邮件。
 
-## 配置模型
+## 你可以做什么
 
-Web 界面保存的是运行时配置，结构如下：
+- 开启或关闭整体监控
+- 添加多个提醒邮箱
+- 新增多个监控规则
+- 为每条规则设置货币、字段、条件、阈值
+- 为不同规则绑定不同邮箱
 
-```json
-{
-  "enabled": true,
-  "emails": ["example@gmail.com"],
-  "rules": [
-    {
-      "enabled": true,
-      "currency": "JPY",
-      "field": "sell",
-      "operator": "lt",
-      "threshold": 5.0
-    }
-  ]
-}
-```
+## 如何使用
 
-字段说明：
+### 1. 打开产品页面
 
-- `enabled`：全局开关
-- `emails`：提醒收件人列表
-- `currency`：货币代码，如 `JPY`、`GBP`、`USD`
-- `field`：监控字段，`buy` 为现汇买入价，`sell` 为现汇卖出价
-- `operator`：比较方式，`gt` 为大于，`lt` 为小于
-- `threshold`：阈值
+进入：
 
-## 部署步骤
+- https://exchange-rate-axv.pages.dev/
 
-### 1. 部署 Cloudflare Worker
+### 2. 添加提醒邮箱
 
-进入 `worker/`：
+在“提醒邮箱”区域：
 
-```bash
-npm install
-```
+- 点击“添加邮箱”
+- 每个输入框填写一个邮箱地址
 
-创建 Cloudflare KV，并把 `worker/wrangler.jsonc` 里的以下值替换掉：
+### 3. 配置监控规则
 
-- `kv_namespaces[0].id`
-- `vars.ALLOWED_ORIGIN`
+在“监控规则”区域：
 
-然后部署：
-
-```bash
-npx wrangler secret put CONFIG_API_TOKEN
-npx wrangler deploy
-```
-
-部署完成后，得到一个类似下面的地址：
-
-```text
-https://exchange-rate-monitor-config.<subdomain>.workers.dev/api/config
-```
-
-### 2. 配置 GitHub Actions Secrets
-
-在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions -> Secrets` 中添加：
-
-- `SENDER_EMAIL`
-- `SENDER_PASSWORD`
-- `CONFIG_API_URL`
-- `CONFIG_API_TOKEN`
+- 点击“添加规则”
+- 选择币种
+- 选择监控字段
+- 选择触发条件
+- 填写阈值
+- 勾选这条规则命中后要通知的邮箱
 
 说明：
 
-- `SENDER_EMAIL`：发件邮箱
-- `SENDER_PASSWORD`：邮箱授权码或应用专用密码
-- `CONFIG_API_URL`：Worker 的 `/api/config` 地址
-- `CONFIG_API_TOKEN`：与 `wrangler secret put CONFIG_API_TOKEN` 写入的值一致
+- 不同规则可以绑定同一个邮箱
+- 同一个邮箱也可以绑定到多条规则
 
-### 3. 部署前端页面
+### 4. 保存配置
 
-前端页面使用 Cloudflare Pages 部署，发布目录是 `web/`。
+点击“保存配置”即可生效。
 
-### 4. 使用 Web 控制台
+### 5. 等待提醒
 
-打开 GitHub Pages 页面后：
+系统会按固定时间自动检查中国银行外汇牌价。  
+当某条规则命中时，只会给这条规则绑定的邮箱发提醒邮件。
 
-1. 页面会自动读取当前配置
-2. 修改开关、邮箱、规则
-3. 点“保存配置”
+## 页面里的字段怎么理解
 
-> 当前前端已内置 Worker API 地址与管理 Token，因此访问者打开页面后即可直接管理配置。
-> 这意味着任何能访问该页面的人都拥有配置读写权限。
+- `货币`：你要监控的币种
+- `字段`：监控现汇买入价或现汇卖出价
+- `条件`：大于或小于阈值时触发
+- `阈值`：你期望的目标价格
+- `启用`：控制该规则是否参与监控
 
-## 监控脚本行为
+## 常见问题
 
-[monitor_action.py](/D:/Project/exchange_rate/monitor_action.py#L46) 每次执行时会先从 Worker 拉配置，再访问中国银行外汇牌价，并按规则判断是否发信。
+### 1. 为什么没有收到邮件？
 
-支持的货币代码当前包括：
+请检查：
 
-- `GBP`
-- `JPY`
-- `USD`
-- `EUR`
-- `HKD`
-- `AUD`
-- `CAD`
-- `SGD`
+- 规则是否已启用
+- 整体监控是否已开启
+- 当前规则是否绑定了邮箱
+- 汇率是否真的达到了你设置的条件
+- 邮件是否进入垃圾邮箱
 
-## 目录结构
+### 2. 为什么某个邮箱没有收到某条规则的提醒？
 
-```text
-.
-├─ .github/workflows/
-│  └─ monitor.yml
-├─ web/
-│  ├─ app.js
-│  ├─ index.html
-│  └─ styles.css
-├─ worker/
-│  ├─ package.json
-│  ├─ wrangler.jsonc
-│  └─ src/index.js
-├─ monitor_action.py
-└─ requirements.txt
-```
+因为现在是“规则绑定邮箱”的模式。  
+只有被这条规则勾选的邮箱，才会收到这条规则触发后的邮件。
+
+### 3. 阈值输入框里的浅色提示是什么？
+
+那是最近一次抓取到的参考汇率，方便你设置阈值时做参考。  
+它不会自动替你填写阈值，只是提示。
+
+## 技术文档
+
+如果你需要看系统架构、后端逻辑、配置结构、部署方式，请查看：
+
+- [technical doc.md](/D:/Project/exchange_rate/technical%20doc.md)
