@@ -64,6 +64,16 @@ function bootstrap() {
 
 function setStatus(message) {
   els.status.textContent = message;
+  const lower = String(message).toLowerCase();
+  if (lower.includes("失败") || lower.includes("error") || lower.includes("http")) {
+    els.status.dataset.tone = "error";
+    return;
+  }
+  if (lower.includes("成功") || lower.includes("已保存") || lower.includes("已加载")) {
+    els.status.dataset.tone = "success";
+    return;
+  }
+  els.status.dataset.tone = "neutral";
 }
 
 function renderEmails(emails) {

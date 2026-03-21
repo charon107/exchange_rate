@@ -9,13 +9,18 @@
   <body>
     <main class="shell">
       <section class="hero">
-        <p class="eyebrow">Exchange Rate Monitor</p>
+        <div class="hero-topline">
+          <p class="eyebrow">Exchange Rate Monitor</p>
+          <span class="hero-badge">AUTO CONFIG</span>
+        </div>
         <h1>汇率监控控制台</h1>
+        <p class="hero-copy">精简配置，自动运行，实时提醒。</p>
       </section>
 
       <section class="panel">
         <div class="row split">
           <div>
+            <p class="section-kicker">Monitor</p>
             <h2>监控开关</h2>
             <p class="muted">关闭后 GitHub Actions 仍会运行，但不会执行提醒规则。</p>
           </div>
@@ -27,6 +32,7 @@
       </section>
 
       <section class="panel">
+        <p class="section-kicker">Recipients</p>
         <h2>提醒邮箱</h2>
         <div id="emails" class="email-list"></div>
         <div class="row actions">
@@ -37,6 +43,7 @@
       <section class="panel">
         <div class="row split">
           <div>
+            <p class="section-kicker">Rules</p>
             <h2>监控规则</h2>
             <p class="muted">支持多个货币规则，每条规则可单独启停。</p>
           </div>
@@ -56,7 +63,7 @@
       <section class="panel">
         <div class="row actions">
           <button id="saveConfig" class="button primary">保存配置</button>
-          <span id="status" class="status">等待操作</span>
+          <span id="status" class="status" data-tone="neutral">等待操作</span>
         </div>
       </section>
     </main>
