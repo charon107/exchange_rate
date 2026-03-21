@@ -171,6 +171,22 @@ function readFormConfig() {
   };
 }
 
+function findDuplicateEmails(emails) {
+  const seen = new Set();
+  const duplicates = new Set();
+
+  emails.forEach((email) => {
+    const normalized = email.toLowerCase();
+    if (seen.has(normalized)) {
+      duplicates.add(email);
+      return;
+    }
+    seen.add(normalized);
+  });
+
+  return Array.from(duplicates);
+}
+
 function writeFormConfig(config) {
   els.enabled.checked = Boolean(config.enabled);
   renderEmails(config.emails || []);
@@ -317,6 +333,12 @@ async function saveConfig() {
   const config = readFormConfig();
   if (!config.emails.length) {
     setStatus("至少添加一个邮箱");
+    return;
+  }
+
+  const duplicateEmails = findDuplicateEmails(config.emails);
+  if (duplicateEmails.length) {
+    setStatus(`检测到重复邮箱：${duplicateEmails.join("、")}。请删除重复项后再保存。`);
     return;
   }
 

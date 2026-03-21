@@ -251,6 +251,19 @@ textarea {
   transition: background 180ms ease, box-shadow 180ms ease;
 }
 
+.toggle-track::after {
+  content: "OFF";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(29, 29, 31, 0.38);
+  transition: color 180ms ease, right 180ms ease, left 180ms ease, content 180ms ease;
+}
+
 .toggle-thumb {
   position: absolute;
   top: 3px;
@@ -268,6 +281,13 @@ textarea {
   box-shadow: inset 0 0 0 1px rgba(0, 113, 227, 0.08), 0 8px 18px rgba(0, 113, 227, 0.18);
 }
 
+.toggle input:checked + .toggle-track::after {
+  content: "ON";
+  left: 9px;
+  right: auto;
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .toggle input:checked + .toggle-track .toggle-thumb {
   transform: translateX(20px);
 }
@@ -280,6 +300,10 @@ textarea {
 
 .toggle-label {
   color: var(--text);
+}
+
+.rule-toggle .toggle-label {
+  display: none;
 }
 
 .button {
