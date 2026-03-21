@@ -39,6 +39,7 @@ let latestRates = {};
 const els = {
   enabled: document.querySelector("#enabled"),
   emails: document.querySelector("#emails"),
+  emailHint: document.querySelector("#emailHint"),
   rules: document.querySelector("#rules"),
   status: document.querySelector("#status"),
   addEmail: document.querySelector("#addEmail"),
@@ -89,6 +90,7 @@ function setStatus(message) {
 function renderEmails(emails) {
   els.emails.innerHTML = "";
   (emails.length ? emails : [""]).forEach((email) => appendEmailRow(email));
+  updateEmailHint();
 }
 
 function appendEmailRow(email) {
@@ -101,10 +103,12 @@ function appendEmailRow(email) {
       appendEmailRow("");
     }
     refreshRuleRecipients();
+    updateEmailHint();
   });
   els.emails.appendChild(fragment);
   row.querySelector('[data-field="email"]').addEventListener("input", () => {
     refreshRuleRecipients();
+    updateEmailHint();
   });
 }
 
@@ -185,6 +189,22 @@ function findDuplicateEmails(emails) {
   });
 
   return Array.from(duplicates);
+}
+
+function updateEmailHint() {
+  const emails = getAvailableEmails();
+  const duplicateEmails = findDuplicateEmails(emails);
+
+  if (!duplicateEmails.length) {
+    els.emailHint.dataset.tone = emails.length ? "success" : "neutral";
+    els.emailHint.textContent = emails.length
+      ? "邮箱列表正常，没有检测到重复项。"
+      : "每个邮箱只需要填写一次。";
+    return;
+  }
+
+  els.emailHint.dataset.tone = "error";
+  els.emailHint.textContent = `检测到重复邮箱：${duplicateEmails.join("、")}。请删除重复项。`;
 }
 
 function writeFormConfig(config) {

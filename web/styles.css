@@ -194,6 +194,15 @@ label span {
   font-weight: 500;
 }
 
+.field-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-block-toggle {
+  align-items: flex-start;
+}
+
 input,
 select,
 textarea,
@@ -472,6 +481,20 @@ textarea {
 .status[data-tone="error"] {
   color: var(--danger);
   border-color: rgba(217, 48, 37, 0.18);
+}
+
+.inline-hint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.inline-hint[data-tone="error"] {
+  color: var(--danger);
+}
+
+.inline-hint[data-tone="success"] {
+  color: var(--success);
 }
 
 @keyframes panel-enter {

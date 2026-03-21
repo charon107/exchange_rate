@@ -21,6 +21,7 @@
         <p class="section-kicker">Recipients</p>
         <h2>提醒邮箱</h2>
         <div id="emails" class="email-list"></div>
+        <p id="emailHint" class="inline-hint" data-tone="neutral">每个邮箱只需要填写一次。</p>
         <div class="row actions">
           <button id="addEmail" class="button secondary" type="button">+ 添加邮箱</button>
         </div>
@@ -73,7 +74,7 @@
     <template id="ruleTemplate">
       <article class="rule-card">
         <div class="grid four">
-          <div>
+          <div class="field-block field-block-toggle">
             <span>启用</span>
             <label class="toggle rule-toggle">
               <input data-field="enabled" type="checkbox">
