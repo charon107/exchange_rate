@@ -1,19 +1,20 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap");
-
 :root {
-  --bg: #f6f1e8;
-  --bg-2: #efe6d8;
-  --panel: rgba(255, 252, 247, 0.82);
-  --panel-border: rgba(123, 92, 56, 0.12);
-  --panel-glow: rgba(220, 183, 127, 0.2);
-  --text: #1e1a16;
-  --muted: #7b7267;
-  --accent: #1f6a5e;
-  --accent-strong: #184f46;
-  --accent-warm: #b57a31;
-  --danger: #b4513c;
-  --success: #1d8a57;
-  --shadow: 0 28px 60px rgba(85, 63, 34, 0.12);
+  --bg: #f5f5f7;
+  --bg-2: #ffffff;
+  --panel: rgba(255, 255, 255, 0.86);
+  --panel-border: rgba(15, 23, 42, 0.06);
+  --panel-glow: rgba(0, 113, 227, 0.08);
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --accent: #0071e3;
+  --accent-strong: #0058b0;
+  --accent-warm: #8a8a8f;
+  --danger: #d93025;
+  --success: #1b7f4a;
+  --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --radius-xl: 32px;
+  --radius-lg: 24px;
+  --radius-md: 18px;
 }
 
 * {
@@ -22,13 +23,14 @@
 
 body {
   margin: 0;
-  font-family: "JetBrains Mono", "Noto Sans SC", monospace;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(31, 106, 94, 0.08), transparent 24%),
-    radial-gradient(circle at top right, rgba(181, 122, 49, 0.12), transparent 28%),
-    radial-gradient(circle at bottom center, rgba(186, 155, 110, 0.12), transparent 24%),
-    linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
+    radial-gradient(circle at top center, rgba(0, 113, 227, 0.07), transparent 22%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
   min-height: 100vh;
   position: relative;
 }
@@ -38,49 +40,51 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background:
-    linear-gradient(rgba(30, 26, 22, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(30, 26, 22, 0.02) 1px, transparent 1px);
-  background-size: 100% 4px, 4px 100%;
-  opacity: 0.35;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent 18%);
+  opacity: 1;
 }
 
 .shell {
-  width: min(1040px, calc(100% - 32px));
+  width: min(1100px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 48px 0 72px;
+  padding: 36px 0 88px;
 }
 
 .hero {
-  padding: 24px 4px 28px;
+  padding: 52px 8px 40px;
   position: relative;
+  text-align: center;
 }
 
 .hero-topline {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 10px;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .eyebrow {
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .hero-badge {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 7px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(31, 106, 94, 0.16);
-  color: var(--accent);
-  background: rgba(31, 106, 94, 0.06);
-  font-size: 12px;
-  letter-spacing: 0.12em;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 h1,
@@ -89,24 +93,27 @@ h2 {
 }
 
 h1 {
-  font-family: "Space Grotesk", "Noto Sans SC", sans-serif;
-  font-size: clamp(44px, 8vw, 84px);
-  line-height: 0.9;
-  margin-bottom: 12px;
-  letter-spacing: -0.05em;
-  max-width: 10ch;
+  font-size: clamp(48px, 9vw, 88px);
+  line-height: 0.95;
+  margin-bottom: 14px;
+  letter-spacing: -0.06em;
+  max-width: none;
+  white-space: nowrap;
+  font-weight: 700;
 }
 
 .hero-copy {
   margin: 0;
   color: var(--muted);
-  font-size: clamp(14px, 2vw, 18px);
+  font-size: clamp(18px, 2.4vw, 24px);
+  font-weight: 400;
 }
 
 h2 {
-  font-size: 24px;
+  font-size: 34px;
   margin-bottom: 8px;
-  font-family: "Space Grotesk", "Noto Sans SC", sans-serif;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 
 .muted,
@@ -118,19 +125,20 @@ label span {
 .section-kicker {
   margin: 0 0 10px;
   font-size: 12px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent-warm);
+  font-weight: 600;
 }
 
 .panel {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 28px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: 32px;
   box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
-  margin-bottom: 18px;
+  backdrop-filter: blur(18px) saturate(160%);
+  margin-bottom: 22px;
   position: relative;
   overflow: hidden;
   animation: panel-enter 500ms ease both;
@@ -139,9 +147,9 @@ label span {
 .panel::after {
   content: "";
   position: absolute;
-  inset: auto -10% -35% auto;
-  width: 240px;
-  height: 240px;
+  inset: auto -14% -42% auto;
+  width: 260px;
+  height: 260px;
   border-radius: 50%;
   background: radial-gradient(circle, var(--panel-glow) 0%, transparent 64%);
   pointer-events: none;
@@ -168,7 +176,7 @@ label span {
 
 .row.split {
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .row.actions {
@@ -183,6 +191,7 @@ label span {
   display: block;
   margin-bottom: 8px;
   font-size: 14px;
+  font-weight: 500;
 }
 
 input,
@@ -196,20 +205,21 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid rgba(123, 92, 56, 0.12);
-  border-radius: 16px;
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  font-size: 16px;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: rgba(31, 106, 94, 0.4);
-  box-shadow: 0 0 0 4px rgba(31, 106, 94, 0.08);
+  border-color: rgba(0, 113, 227, 0.36);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.12);
   transform: translateY(-1px);
 }
 
@@ -221,6 +231,7 @@ textarea {
   display: inline-flex;
   gap: 10px;
   align-items: center;
+  font-weight: 600;
 }
 
 .toggle input {
@@ -232,7 +243,7 @@ textarea {
 .button {
   border: 0;
   border-radius: 999px;
-  padding: 12px 18px;
+  padding: 13px 22px;
   cursor: pointer;
   transition:
     transform 120ms ease,
@@ -254,22 +265,24 @@ textarea {
 
 .button.primary {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-  color: #f8f4ee;
-  box-shadow: 0 14px 28px rgba(31, 106, 94, 0.18);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(0, 113, 227, 0.18);
+  font-weight: 600;
 }
 
 .button.primary:hover {
-  box-shadow: 0 18px 36px rgba(31, 106, 94, 0.22);
+  box-shadow: 0 18px 36px rgba(0, 113, 227, 0.22);
 }
 
 .button.secondary {
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--accent-warm);
-  border: 1px solid rgba(181, 122, 49, 0.12);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
 }
 
 .button.danger {
-  background: rgba(180, 81, 60, 0.08);
+  background: rgba(217, 48, 37, 0.08);
   color: var(--danger);
 }
 
@@ -292,23 +305,23 @@ textarea {
 }
 
 .rule-card {
-  border: 1px solid rgba(123, 92, 56, 0.1);
-  border-radius: 20px;
-  padding: 18px;
-  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.88);
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
 .rule-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(31, 106, 94, 0.2);
-  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(0, 113, 227, 0.18);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .rule-help {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid rgba(123, 92, 56, 0.1);
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .rule-help p {
@@ -334,18 +347,18 @@ textarea {
   min-height: 42px;
   padding: 10px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(123, 92, 56, 0.1);
-  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .status[data-tone="success"] {
   color: var(--success);
-  border-color: rgba(29, 138, 87, 0.24);
+  border-color: rgba(27, 127, 74, 0.18);
 }
 
 .status[data-tone="error"] {
   color: var(--danger);
-  border-color: rgba(180, 81, 60, 0.24);
+  border-color: rgba(217, 48, 37, 0.18);
 }
 
 @keyframes panel-enter {
@@ -379,6 +392,6 @@ textarea {
   }
 
   h1 {
-    max-width: none;
+    white-space: normal;
   }
 }
