@@ -355,8 +355,8 @@ def main():
     print("Exchange Rate Monitor")
     print("=" * 70)
     print(f"Monitor enabled: {config['enabled']}")
-        print(f"Receiver count: {len(config['emails'])}")
-        print(f"Rule count: {len(config['rules'])}")
+    print(f"Receiver count: {len(config['emails'])}")
+    print(f"Rule count: {len(config['rules'])}")
     print("-" * 70)
 
     if not config["enabled"]:
