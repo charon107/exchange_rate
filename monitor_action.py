@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-GitHub Actions 版本 - 中国银行汇率监控
+GitHub Actions entrypoint for exchange rate monitoring.
 
-运行方式:
-1. 从 Cloudflare Worker 拉取运行时配置
-2. 抓取中国银行外汇牌价
-3. 按规则判断是否触发提醒
-4. 通过 SMTP 发送邮件
+Flow:
+1. Fetch runtime config from the Cloudflare Worker.
+2. Scrape the Bank of China exchange rate page.
+3. Evaluate configured rules.
+4. Send alert emails for matched rules.
 """
 
 import os
@@ -30,8 +30,8 @@ CURRENCY_CONFIG = {
     "USD": {"name": "美元", "name_en": "US Dollar", "symbol": "USD"},
     "EUR": {"name": "欧元", "name_en": "Euro", "symbol": "EUR"},
     "HKD": {"name": "港币", "name_en": "Hong Kong Dollar", "symbol": "HKD"},
-    "AUD": {"name": "澳大利亚元", "name_en": "Australian Dollar", "symbol": "AUD"},
-    "CAD": {"name": "加拿大元", "name_en": "Canadian Dollar", "symbol": "CAD"},
+    "AUD": {"name": "澳元", "name_en": "Australian Dollar", "symbol": "AUD"},
+    "CAD": {"name": "加元", "name_en": "Canadian Dollar", "symbol": "CAD"},
     "SGD": {"name": "新加坡元", "name_en": "Singapore Dollar", "symbol": "SGD"},
 }
 
@@ -46,8 +46,16 @@ OPERATOR_LABELS = {
 }
 
 
+def mask_token(token):
+    if not token:
+        return "<missing>"
+    if len(token) <= 8:
+        return "*" * len(token)
+    return f"{token[:4]}...{token[-4:]}"
+
+
 def fetch_runtime_config():
-    """从远端配置 API 拉取配置。"""
+    """Fetch runtime config from the Worker config API."""
     api_url = os.environ.get("CONFIG_API_URL")
     api_token = os.environ.get("CONFIG_API_TOKEN")
 
@@ -55,16 +63,47 @@ def fetch_runtime_config():
         print("[ERROR] CONFIG_API_URL is required")
         sys.exit(1)
 
-    headers = {"Accept": "application/json"}
-    if api_token:
-        headers["Authorization"] = f"Bearer {api_token}"
+    if not api_token:
+        print("[ERROR] CONFIG_API_TOKEN is required")
+        sys.exit(1)
+
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {api_token}",
+    }
 
     try:
         response = requests.get(api_url, headers=headers, timeout=30)
+    except requests.RequestException as exc:
+        print(f"[ERROR] Failed to reach runtime config API: {exc}")
+        print(f"[DEBUG] CONFIG_API_URL={api_url}")
+        print(
+            "[DEBUG] CONFIG_API_TOKEN="
+            f"{mask_token(api_token)} (len={len(api_token)})"
+        )
+        sys.exit(1)
+
+    if response.status_code == 401:
+        print("[ERROR] Runtime config API returned 401 Unauthorized")
+        print("[HINT] Check whether GitHub Secret CONFIG_API_TOKEN matches")
+        print("[HINT] the Cloudflare Worker secret named CONFIG_API_TOKEN.")
+        print(f"[DEBUG] CONFIG_API_URL={api_url}")
+        print(
+            "[DEBUG] CONFIG_API_TOKEN="
+            f"{mask_token(api_token)} (len={len(api_token)})"
+        )
+        sys.exit(1)
+
+    try:
         response.raise_for_status()
         payload = response.json()
-    except Exception as exc:
+    except requests.RequestException as exc:
         print(f"[ERROR] Failed to fetch runtime config: {exc}")
+        print(f"[DEBUG] CONFIG_API_URL={api_url}")
+        sys.exit(1)
+    except ValueError as exc:
+        print(f"[ERROR] Config API returned invalid JSON: {exc}")
+        print(f"[DEBUG] CONFIG_API_URL={api_url}")
         sys.exit(1)
 
     config = payload.get("config") if isinstance(payload, dict) else None
@@ -77,14 +116,15 @@ def fetch_runtime_config():
 
 def get_boc_exchange_rates():
     """
-    从中国银行获取汇率数据。
-    返回:
+    Scrape exchange rates from Bank of China.
+
+    Returns:
         {
-            'GBP': {
-                'buy': 923.1,
-                'sell': 930.2,
-                'currency_name': '英镑',
-                'update_time': '2026-03-21 10:00:00'
+            "GBP": {
+                "buy": 923.1,
+                "sell": 930.2,
+                "currency_name": "英镑",
+                "update_time": "2026-03-21 10:00:00",
             }
         }
     """
@@ -102,7 +142,7 @@ def get_boc_exchange_rates():
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         response.encoding = "utf-8"
-    except Exception as exc:
+    except requests.RequestException as exc:
         print(f"[ERROR] Failed to request BOC page: {exc}")
         return rates
 
@@ -229,7 +269,7 @@ def evaluate_rule(rule, rates):
 
 
 def send_rule_alert(rule, rate_info, sender_email, sender_password, receiver_emails):
-    """发送规则命中的提醒邮件。"""
+    """Send an email when a rule is matched."""
     currency_code = rule["currency"]
     currency_meta = CURRENCY_CONFIG[currency_code]
     rate_value = rate_info.get(rule["field"])
@@ -323,7 +363,12 @@ https://www.boc.cn/sourcedb/whpj/
             server.quit()
             print(f"[OK] Alert email sent for {currency_code}")
             return True
-        except (smtplib.SMTPServerDisconnected, ConnectionError, TimeoutError, OSError) as exc:
+        except (
+            smtplib.SMTPServerDisconnected,
+            ConnectionError,
+            TimeoutError,
+            OSError,
+        ) as exc:
             print(f"[WARN] Attempt {attempt + 1}/{max_retries} failed: {exc}")
             if attempt < max_retries - 1:
                 time.sleep(5)
