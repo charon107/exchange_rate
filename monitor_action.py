@@ -46,6 +46,13 @@ OPERATOR_LABELS = {
 }
 
 
+def get_env(name):
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    return value.strip()
+
+
 def mask_token(token):
     if not token:
         return "<missing>"
@@ -56,8 +63,8 @@ def mask_token(token):
 
 def fetch_runtime_config():
     """Fetch runtime config from the Worker config API."""
-    api_url = os.environ.get("CONFIG_API_URL")
-    api_token = os.environ.get("CONFIG_API_TOKEN")
+    api_url = get_env("CONFIG_API_URL")
+    api_token = get_env("CONFIG_API_TOKEN")
 
     if not api_url:
         print("[ERROR] CONFIG_API_URL is required")
@@ -74,6 +81,15 @@ def fetch_runtime_config():
 
     try:
         response = requests.get(api_url, headers=headers, timeout=30)
+    except ValueError as exc:
+        print(f"[ERROR] Invalid config API request headers: {exc}")
+        print("[HINT] CONFIG_API_URL or CONFIG_API_TOKEN likely contains spaces or newlines.")
+        print(f"[DEBUG] CONFIG_API_URL={api_url}")
+        print(
+            "[DEBUG] CONFIG_API_TOKEN="
+            f"{mask_token(api_token)} (len={len(api_token)})"
+        )
+        sys.exit(1)
     except requests.RequestException as exc:
         print(f"[ERROR] Failed to reach runtime config API: {exc}")
         print(f"[DEBUG] CONFIG_API_URL={api_url}")
@@ -386,8 +402,8 @@ https://www.boc.cn/sourcedb/whpj/
 
 
 def main():
-    sender_email = os.environ.get("SENDER_EMAIL")
-    sender_password = os.environ.get("SENDER_PASSWORD")
+    sender_email = get_env("SENDER_EMAIL")
+    sender_password = get_env("SENDER_PASSWORD")
 
     if not sender_email or not sender_password:
         print("[ERROR] SENDER_EMAIL and SENDER_PASSWORD are required")
